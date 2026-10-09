@@ -9,6 +9,7 @@ dist/
 coverage/
 *.log
 tmp/phase1-synthetic-backup.dhroom
+.playwright-cli/
 
 # Documents and Character Sheets
 GM面板开发文档.md
