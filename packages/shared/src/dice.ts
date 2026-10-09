@@ -4,7 +4,7 @@ import type {
   DiceRollRequest,
   DiceRollResult,
   DiceTermRoll,
-} from './types'
+} from './dice-types'
 
 const ALLOWED_DICE = new Set([4, 6, 8, 10, 12, 20, 100])
 const MAX_REPEAT = 20
