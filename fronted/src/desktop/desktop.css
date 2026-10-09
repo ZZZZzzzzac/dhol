@@ -1,0 +1,20 @@
+.desktop-shell { max-width: 1100px; margin: 0 auto; padding: 2rem; color: #201739; font-family: system-ui, sans-serif; }
+.desktop-shell button { border: 1px solid #6d5bd0; border-radius: .5rem; background: #fff; color: #27185a; padding: .4rem .7rem; cursor: pointer; }
+.desktop-shell button:disabled { opacity: .45; cursor: not-allowed; }
+.desktop-shell button:focus-visible, .desktop-shell input:focus-visible { outline: 3px solid #0f9f83; outline-offset: 2px; }
+.desktop-shell input { display: block; width: 100%; max-width: 22rem; margin: .4rem 0 1rem; padding: .55rem; border: 1px solid #8d86a7; border-radius: .4rem; }
+.desktop-shell form { margin: 1.5rem 0; }
+.desktop-header { display: flex; justify-content: space-between; align-items: start; gap: 1rem; }
+.desktop-header h1 { margin-bottom: .25rem; }
+.desktop-status { padding: .75rem; border-radius: .5rem; background: #e5f6f3; }
+.desktop-error { color: #8f1f34; }
+.desktop-controls { display: flex; flex-wrap: wrap; align-items: center; gap: 1rem; margin: 1.5rem 0; }
+.desktop-controls div, .desktop-hope, .desktop-track { display: flex; align-items: center; flex-wrap: wrap; gap: .5rem; }
+.desktop-characters { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 1rem; }
+.desktop-character, .desktop-dice { padding: 1rem; background: #fff; border: 1px solid #d8d3e8; border-radius: .8rem; }
+.desktop-character h2 { margin-top: 0; }
+.desktop-track { margin-top: .65rem; }
+.desktop-track button[aria-pressed="true"] { background: #27185a; color: white; }
+.desktop-dice { margin-top: 1rem; }
+.desktop-narrow { display: none; }
+@media (max-width: 740px) { .desktop-controls, .desktop-characters, .desktop-dice { display: none; } .desktop-narrow { display: block; padding: 1rem; background: #fff; border-radius: .5rem; } }

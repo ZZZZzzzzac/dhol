@@ -79,12 +79,12 @@
 ### 旧版故障代码证据
 
 - `fronted/src/components/gm-panel/GmPanelBoard.tsx` 约 119–163 行：可见卡片开始请求时设置 `loading: true`，切页清理只设置 `disposed = true`。请求完成后回调因 `disposed` 直接返回；再次进入时 `cached?.loading` 阻止新请求。这能解释持续加载，尚未证明线上出现频率。
-- `apps/realtime/src/index.ts` 约 1431–1437、1505–1532 行：DO 读出旧房间后调用 `hydrateStoredGmSheetHtml()`；当 HTML 需要补载时，用 `applyHtmlResourceTracksToSheet()` 把源 HTML 的资源写回 `parsed_sheet`，随后重新编译 HTML。这给 hp/stress 回退提供了可复查路径；需在旧版隔离实例确认触发条件。
+- 原 `apps/realtime/src/index.ts`（现隔离到 `legacy-room.ts`）约 1431–1437、1505–1532 行：DO 读出旧房间后调用 `hydrateStoredGmSheetHtml()`；当 HTML 需要补载时，用 `applyHtmlResourceTracksToSheet()` 把源 HTML 的资源写回 `parsed_sheet`，随后重新编译 HTML。这给 hp/stress 回退提供了可复查路径；需在旧版隔离实例确认触发条件。
 - 同文件 `commit()` 约 1355–1375 行：旧掷骰可走 `waitForPersistence: false`，广播发生在保存完成前。该路径只说明存在“已显示但未保存”的可能，尚无线上失败率数据。
 
 ## 阶段二：新版回归场景
 
-`apps/realtime/src/__tests__/room-v2-recovery.test.ts` 和 `fronted/src/__tests__/room-v2-sync.test.ts` 已列出对应 `it.todo`。阶段四、五的存储及同步实现加入后，将这些项目改为可执行断言；阶段七的详情组件加入后验证慢请求与替换。当前不能报告这些回归已通过。
+`apps/realtime/src/__tests__/room-v2-recovery.test.ts` 和 `fronted/src/__tests__/room-v2-sync.test.ts` 的阶段四、五用例现已改为可执行断言。完整卡组件的实际加载与视觉行为仍留待阶段七验证。
 
 | 场景 | 合格条件 | 归属 |
 | --- | --- | --- |
@@ -102,8 +102,20 @@
 
 ## 测试入口
 
-本地 Vite 开发服务器的 `/preview` 展示可操作的房间应用，根路径继续展示公告。在 Pages 的专用测试构建中设置构建环境变量 `VITE_ENABLE_PREVIEW=true` 后，`/preview` 同样可进入；正式构建未设置该变量时不会开放此路由。现阶段它连接旧版 UI；阶段五接入新的 `DesktopApp` 时更换 `fronted/src/preview/PreviewApp.tsx`，不要将旧业务模块接入新版应用。该路径只是测试开关，不承担身份认证；要限制测试人员访问，应在 Pages/Cloudflare Access 层配置访问规则。
+本地 Vite 开发服务器的 `/preview` 展示独立的新版桌面测试入口，根路径继续展示公告。在 Pages 的专用测试构建中设置构建环境变量 `VITE_ENABLE_PREVIEW=true` 后，`/preview` 同样可进入；正式构建未设置该变量时不会开放此路由。该路径只是测试开关，不承担身份认证；要限制测试人员访问，应在 Pages/Cloudflare Access 层配置访问规则。阶段七继续完成四卡布局和只读完整卡。
 
 2026-10-09 本地浏览器检查：`http://localhost:5173/` 显示“当前项目技术升级中”；`http://localhost:5173/preview` 显示房间创建与加入界面。该检查没有创建房间或访问生产用户数据。
 
 检查结果：共享测试 38/38、实时服务测试 46 项通过（2 项阶段四待实现）、前端测试 13 项通过（6 项阶段五/七待实现）、两仓库 TypeScript 检查通过，dhol 构建通过。变更的前端文件定向 ESLint 通过。仓库全量前端 lint 有 27 条旧组件问题（26 error、1 warning，主要为旧界面 effect 同步 setState）；新版入口文件没有新增 lint 问题。阶段四、五、七的 `todo` 不能算已通过回归。
+
+## 阶段四、五：本地闭环记录（2026-10-09）
+
+新版 Worker 入口现只装配路由并导出两个 DO 类；旧实现暂存 `legacy-room.ts`，新路由、会话、SQLite 存储和命令模块均独立。`ROOMS_V2` 使用新增 SQLite migration；此记录只涉及本地 Wrangler，尚未发布到生产。
+
+本地 Wrangler `4.92.0`，Node `22.14.0`，地址为 `127.0.0.1:8791`。`scripts/room-v2-smoke.mjs` 使用两个真实 WebSocket 和合成角色验证不同生命格并发、恐惧并发、正式骰子一致、同 ID 投递与掷骰去重、50 条骰子历史裁剪后旧 receipt 仍有效、同名替换后旧 generation 拒绝。`scripts/room-v2-client-smoke.mjs` 用实际 `RoomSync` 连接两个客户端，验证保存广播、骰子、刷新恢复，以及刻意丢失 ACK/事件后断线重连用原 requestId 的 receipt 消除待确认操作。两项脚本均通过；这不是浏览器视觉验收。
+
+`scripts/room-v2-restart-check.mjs setup` 在本地写入生命/压力标记后，停止并重启 Wrangler，再执行 `check`：新实例读回原资源、seq 和 receipt。临时测试 token 只放在 `tmp/` 并已由检查脚本删除。相关定向测试：实时服务 8/8、前端同步与 outbox 10/10；完整套件为共享 38/38、实时服务 53/53、前端 22/22。`npm run build` 与新版前端文件定向 ESLint 均通过。持久化失败后的队列继续执行由命令测试注入故障验证；云端故障与正式域名延迟尚未测量。
+
+浏览器检查使用 Playwright CLI 打开本地 Vite `/preview` 并连接本地 Wrangler：创建新版房间后显示“已连接 · 已保存”，点击恐惧 `+` 与 d20 后看到正式状态和骰子记录；投递合成角色后在线出现摘要资源按钮，标记首个生命格、刷新页面，已确认标记仍在。页面控制台无错误或警告。该入口只用于阶段五闭环，不代表阶段七的卡面与适配布局已经验收。
+
+断线复测时主动停止本地 Wrangler：浏览器改为“正在连接”，修改按钮禁用；重启 Wrangler 后同一页面恢复“已连接 · 已保存”。停服期间控制台出现预期的连接拒绝，恢复后没有 `Illegal invocation`。此复测发现并修正了浏览器计时器脱离调用上下文的问题。

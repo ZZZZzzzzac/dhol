@@ -7,8 +7,10 @@ const MAX_TRACK_LENGTH = 100
 const RULE_SETS: ReadonlySet<string> = new Set<RuleSetId>(['daggerheart', 'rhodes-island'])
 
 export class CharacterValidationError extends Error {
-  constructor(public readonly code: 'INVALID_CHARACTER' | 'UNSUPPORTED_SCHEMA' | 'PAYLOAD_TOO_LARGE', message: string) {
+  readonly code: 'INVALID_CHARACTER' | 'UNSUPPORTED_SCHEMA' | 'PAYLOAD_TOO_LARGE'
+  constructor(code: 'INVALID_CHARACTER' | 'UNSUPPORTED_SCHEMA' | 'PAYLOAD_TOO_LARGE', message: string) {
     super(message)
+    this.code = code
   }
 }
 

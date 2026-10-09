@@ -1,16 +1,94 @@
 import { describe, expect, it } from 'vitest'
+import type { RoomSocket } from '../desktop/sync/room-client'
+import { RoomSync } from '../desktop/state/room-sync'
 import { createRoomV2Fixture } from '../../../packages/shared/src/__tests__/fixtures/room-v2-fixture'
 
-// Phase five provides the independent room sync and outbox constructors.
-describe('Room V2 client recovery contract', () => {
-  const initialRoom = createRoomV2Fixture()
-  it('provides separate room identities for version ordering cases', () => {
-    expect(createRoomV2Fixture('room-other', 11).roomId).not.toBe(initialRoom.roomId)
+function harness(roomId = 'room-fixture') {
+  const data = new Map<string, string>()
+  const storage = { getItem: (key: string) => data.get(key) ?? null, setItem: (key: string, value: string) => { data.set(key, value) }, removeItem: (key: string) => { data.delete(key) } }
+  const sent: unknown[] = []
+  const socket = { readyState: 1, onopen: null, onmessage: null, onclose: null, onerror: null, send: (value: string) => { sent.push(JSON.parse(value)) }, close: () => undefined } as RoomSocket
+  const sync = new RoomSync({ roomId, actorId: 'player-a', websocketUrl: 'ws://example.test', storage, client: { socketFactory: () => socket } })
+  sync.start()
+  socket.onopen?.call(socket as WebSocket, new Event('open'))
+  const room = createRoomV2Fixture(roomId)
+  sync.receive({ type: 'room.snapshot', protocolVersion: 2, room, receipts: [] })
+  return { sync, room, socket, sent, storage }
+}
+
+describe('Room V2 sync', () => {
+  it('retains optimistic hope after ACK until the event is applied', () => {
+    const { sync, room } = harness()
+    const name = room.characters[0].name
+    const generation = room.characters[0].generation
+    const requestId = sync.submit({ type: 'character.adjustHope', name, generation, delta: 1 })
+    expect(sync.getState().room!.characters[0].resources.hope).toBe(room.characters[0].resources.hope + 1)
+    sync.receive({ type: 'operation.ack', requestId, seq: 1 })
+    expect(sync.pending()).toHaveLength(1)
+    expect(sync.getState().room!.characters[0].resources.hope).toBe(room.characters[0].resources.hope + 1)
+    sync.receive({ type: 'character.resourcesChanged', requestId, seq: 1, name, generation, resources: { ...room.characters[0].resources, hope: room.characters[0].resources.hope + 1 } })
+    expect(sync.pending()).toHaveLength(0)
+    expect(sync.getState().room!.characters[0].resources.hope).toBe(room.characters[0].resources.hope + 1)
+    expect(sync.getState().save).toBe('saved')
+    sync.destroy()
   })
-  it.todo('keeps a pending resource mark while paging away and back')
-  it.todo('ignores snapshot seq 11 after event seq 12 for the same room')
-  it.todo('resets the seq comparison when entering a different roomId')
-  it.todo('recovers the same requestId after refresh and lost ACK without applying twice')
-  it.todo('allows retry after a detail fetch is canceled by paging away')
-  it.todo('discards an old generation detail response after a same-name replacement')
+
+  it('ignores old snapshots and requests a current snapshot for gaps', () => {
+    const { sync, room, sent } = harness()
+    sync.receive({ type: 'room.snapshot', protocolVersion: 2, room: { ...room, seq: 12, fear: { value: 5, max: 12 } }, receipts: [] })
+    sync.receive({ type: 'room.snapshot', protocolVersion: 2, room: { ...room, seq: 11, fear: { value: 1, max: 12 } }, receipts: [] })
+    expect(sync.getConfirmed()!.seq).toBe(12)
+    expect(sync.getConfirmed()!.fear.value).toBe(5)
+    sync.receive({ type: 'room.fearChanged', seq: 14, requestId: 'other', fear: { value: 6, max: 12 } })
+    expect(sent.at(-1)).toMatchObject({ type: 'room.sync', afterSeq: 12 })
+    sync.destroy()
+  })
+
+  it('removes a lost ACK operation from a matching snapshot receipt before projection', () => {
+    const { sync, room, storage } = harness()
+    const requestId = sync.submit({ type: 'room.adjustFear', delta: 1 })
+    const reloaded = new RoomSync({ roomId: room.roomId, actorId: 'player-a', websocketUrl: 'ws://example.test', storage })
+    reloaded.receive({ type: 'room.snapshot', protocolVersion: 2, room: { ...room, seq: 1, fear: { value: 1, max: 12 } }, receipts: [{ type: 'operation.ack', requestId, seq: 1 }] })
+    expect(reloaded.pending()).toHaveLength(0)
+    expect(reloaded.getState().room!.fear.value).toBe(1)
+    sync.destroy(); reloaded.destroy()
+  })
+
+  it('discards stale generation operations and detail fetches', async () => {
+    const { sync, room } = harness()
+    const old = room.characters[0]
+    const requestId = sync.submit({ type: 'character.adjustHope', name: old.name, generation: old.generation, delta: 1 })
+    let resolve!: (value: unknown) => void
+    const detail = sync.detail(old.name, old.generation, () => new Promise(complete => { resolve = complete }))
+    sync.receive({ type: 'character.replaced', requestId: 'delivery-new', seq: 1, name: old.name, generation: 1, summary: { ...old, generation: 1 } })
+    sync.receive({ type: 'character.replaced', requestId: 'delivery-newer', seq: 2, name: old.name, generation: 2, summary: { ...old, generation: 2 } })
+    resolve({ sheet: 'old' })
+    await expect(detail).rejects.toThrow('重新投递')
+    expect(sync.pending().some(entry => entry.command.requestId === requestId)).toBe(false)
+    expect(sync.ui.getState().notice).toContain('重新投递')
+    sync.destroy()
+  })
+
+  it('does not notify a character subscriber for a dice event', () => {
+    const { sync, room } = harness()
+    let characterUpdates = 0
+    const unsubscribe = sync.subscribeCharacter(room.characters[0].name, () => { characterUpdates++ })
+    sync.receive({
+      type: 'dice.rolled', requestId: 'roll', seq: 1,
+      roll: { id: 'roll', created_at: '2026-10-09T00:00:00.000Z', actor_player_id: 'player-a', actor_name: '甲', normalized_formula: '1d20',
+        request: { mode: 'standard', modifier_mode: 'normal', repeat: 1, modifier: 0, dice: [{ sides: 20, count: 1 }] }, mode: 'standard', modifier_mode: 'normal',
+        results: [{ total: 10, critical: false, primary_rolls: [10], terms: [{ notation: '1d20', sides: 20, count: 1, rolls: [10], subtotal: 10 }] }],
+      },
+    })
+    expect(characterUpdates).toBe(0)
+    unsubscribe(); sync.destroy()
+  })
+
+  it('retries a detail read after a canceled request', async () => {
+    const { sync, room } = harness()
+    const character = room.characters[0]
+    await expect(sync.detail(character.name, character.generation, async () => { throw new Error('aborted') })).rejects.toThrow('aborted')
+    await expect(sync.detail(character.name, character.generation, async () => ({ sheet: 'retry' }))).resolves.toEqual({ sheet: 'retry' })
+    sync.destroy()
+  })
 })
