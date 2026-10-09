@@ -1,6 +1,13 @@
+import { lazy, Suspense } from 'react'
+import { isPreviewEnabled } from './preview/isPreviewEnabled'
 import './maintenance.css'
 
+const PreviewApp = lazy(() => import('./preview/PreviewApp'))
+
 export default function App() {
+  if (isPreviewEnabled(window.location.pathname, import.meta.env.DEV, import.meta.env.VITE_ENABLE_PREVIEW === 'true')) {
+    return <Suspense fallback={<main>正在加载测试版…</main>}><PreviewApp /></Suspense>
+  }
   return (
     <main className="maintenance-page">
       <div className="maintenance-glow maintenance-glow--left" aria-hidden="true" />
