@@ -8,6 +8,7 @@ dist/
 .dev.vars.*
 coverage/
 *.log
+tmp/phase1-synthetic-backup.dhroom
 
 # Documents and Character Sheets
 GM面板开发文档.md
