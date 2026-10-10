@@ -91,4 +91,22 @@ describe('Room V2 sync', () => {
     await expect(sync.detail(character.name, character.generation, async () => ({ sheet: 'retry' }))).resolves.toEqual({ sheet: 'retry' })
     sync.destroy()
   })
+
+  it('applies the formal roll and clears its pending request in one UI notification', () => {
+    const { sync } = harness()
+    const requestId = sync.submit({ type: 'dice.roll', payload: { mode: 'standard', modifier_mode: 'normal', repeat: 1, modifier: 0, dice: [{ sides: 20, count: 1 }] } })
+    let updates = 0
+    const unsubscribe = sync.subscribe(() => { updates++ })
+    sync.receive({
+      type: 'dice.rolled', requestId, seq: 1,
+      roll: { id: 'formal-roll', created_at: '2026-10-10T00:00:00.000Z', actor_player_id: 'player-a', actor_name: '甲', normalized_formula: '1d20',
+        request: { mode: 'standard', modifier_mode: 'normal', repeat: 1, modifier: 0, dice: [{ sides: 20, count: 1 }] }, mode: 'standard', modifier_mode: 'normal',
+        results: [{ total: 12, critical: false, primary_rolls: [12], terms: [{ notation: '1d20', sides: 20, count: 1, rolls: [12], subtotal: 12 }] }],
+      },
+    })
+    expect(sync.getState().room?.dice.at(-1)?.id).toBe('formal-roll')
+    expect(sync.pending()).toHaveLength(0)
+    expect(updates).toBe(1)
+    unsubscribe(); sync.destroy()
+  })
 })

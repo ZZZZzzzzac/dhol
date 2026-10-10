@@ -44,6 +44,12 @@ export class RoomV2Storage {
     return row ? JSON.parse(row.room_json) as StoredMeta : null
   }
 
+  roomExpiresAt(): string | null {
+    if (this.deleted) return null
+    const row = this.storage.sql.exec<{ expires_at: string | null }>("SELECT json_extract(room_json, '$.expiresAt') AS expires_at FROM panel_v2_meta WHERE id = 1").toArray()[0]
+    return row?.expires_at ?? null
+  }
+
   create(meta: StoredMeta): boolean {
     if (this.deleted) this.initialize()
     if (this.metaRow()) return false

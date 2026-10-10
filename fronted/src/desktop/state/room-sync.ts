@@ -127,13 +127,13 @@ export class RoomSync {
     return requestId
   }
 
-  private finish(requestId: string): void {
+  private finish(requestId: string, notify = true): void {
     const timer = this.confirmationTimers.get(requestId)
     if (timer) this.clearTimer(timer)
     this.confirmationTimers.delete(requestId)
     this.outbox.remove(requestId)
     this.save = this.outbox.list().length ? 'saving' : 'saved'
-    this.emit()
+    if (notify) this.emit()
   }
 
   private receiveSnapshot(message: RoomSnapshot): void {
@@ -206,7 +206,7 @@ export class RoomSync {
       }
     }
     this.confirmed.apply(event)
-    if (this.outbox.list().some(entry => entry.command.requestId === event.requestId)) this.finish(event.requestId)
+    if (this.outbox.list().some(entry => entry.command.requestId === event.requestId)) this.finish(event.requestId, false)
     this.emit()
   }
 

@@ -1,7 +1,6 @@
 import { StrictMode } from 'react'
 import { createRoot } from 'react-dom/client'
 import DesktopApp from './desktop/DesktopApp.tsx'
-import './index.css'
 
 createRoot(document.getElementById('root')!).render(
   <StrictMode>

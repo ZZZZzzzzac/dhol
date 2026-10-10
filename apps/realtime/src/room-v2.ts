@@ -20,7 +20,9 @@ export class RoomV2DurableObject extends DurableObject<RoomV2Env> {
   constructor(ctx: DurableObjectState, env: RoomV2Env) {
     super(ctx, env)
     this.db = new RoomV2Storage(ctx.storage)
-    this.commands = new RoomV2Commands(this.db, event => this.broadcast(event))
+    this.commands = new RoomV2Commands(this.db, event => this.broadcast(event), {
+      onRollMetric: metric => console.log(JSON.stringify({ type: 'room_v2_roll_metric', ...metric })),
+    })
     ctx.blockConcurrencyWhile(async () => { this.db.initialize() })
   }
 

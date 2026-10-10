@@ -1,12 +1,19 @@
 import { characterNameKey, resourcesFromSheet, rollDicePool, summaryFromSheet, type CharacterSheetJson, type DiceRollRecord, type MutationAck, type MutationCommand, type MutationError, type RoomEvent } from '@dhgc/shared/desktop'
 import { RoomV2Storage } from './room-v2-storage'
+import { summarizeRollServerMetrics, type RollCommandMetric } from './room-v2-metrics'
+
+export type { RollCommandMetric } from './room-v2-metrics'
 
 export class CommandFailure extends Error {
   constructor(readonly code: MutationError['code'], message: string) { super(message) }
 }
 
 export interface CommitResult { ack: MutationAck; event: RoomEvent | null; duplicate: boolean; action?: 'created' | 'updated' }
-export type CommandStorage = Pick<RoomV2Storage, 'receipt' | 'metaRow' | 'meta' | 'characterHeader' | 'resources' | 'nextPosition' | 'transaction' | 'advance' | 'saveReceipt' | 'saveResources' | 'saveCharacter' | 'deleteCharacter' | 'saveDice' | 'clearDice'>
+export type CommandStorage = Pick<RoomV2Storage, 'receipt' | 'metaRow' | 'roomExpiresAt' | 'characterHeader' | 'resources' | 'nextPosition' | 'transaction' | 'advance' | 'saveReceipt' | 'saveResources' | 'saveCharacter' | 'deleteCharacter' | 'saveDice' | 'clearDice'>
+export interface RoomV2CommandOptions {
+  now?: () => number
+  onRollMetric?: (metric: RollCommandMetric) => void
+}
 
 function canonical(value: unknown): unknown {
   if (Array.isArray(value)) return value.map(canonical)
@@ -29,7 +36,10 @@ function randomInt(max: number): number {
 
 export class RoomV2Commands {
   private tail: Promise<unknown> = Promise.resolve()
-  constructor(private readonly db: CommandStorage, private readonly publish: (event: RoomEvent) => void) {}
+  private readonly now: () => number
+  constructor(private readonly db: CommandStorage, private readonly publish: (event: RoomEvent) => void, private readonly options: RoomV2CommandOptions = {}) {
+    this.now = options.now ?? (() => performance.now())
+  }
 
   private enqueue<T>(operation: () => T): Promise<T> {
     const result = this.tail.then(operation, operation)
@@ -38,8 +48,19 @@ export class RoomV2Commands {
   }
 
   async mutate(actor: string, nickname: string, command: MutationCommand): Promise<CommitResult> {
+    const receivedAtMs = this.now()
     const hash = await payloadHash(command)
-    return this.enqueue(() => this.commit(actor, command.requestId, hash, this.applyCommand(actor, nickname, command)))
+    return this.enqueue(() => {
+      const queuedAtMs = this.now()
+      let storedAtMs = queuedAtMs
+      let broadcastAtMs = queuedAtMs
+      const result = this.commit(actor, command.requestId, hash, this.applyCommand(actor, nickname, command), () => { storedAtMs = this.now() }, () => { broadcastAtMs = this.now() })
+      if (command.type === 'dice.roll' && !result.duplicate && result.event?.type === 'dice.rolled') {
+        const eventBytes = new TextEncoder().encode(JSON.stringify(result.event)).byteLength
+        this.options.onRollMetric?.(summarizeRollServerMetrics({ requestId: command.requestId, receivedAtMs, queuedAtMs, storedAtMs, broadcastAtMs }, eventBytes))
+      }
+      return result
+    })
   }
 
   async replace(actor: string, requestId: string, sheet: CharacterSheetJson): Promise<CommitResult> {
@@ -55,7 +76,7 @@ export class RoomV2Commands {
     }))
   }
 
-  private commit(actor: string, requestId: string, hash: string, build: (seq: number) => { event: RoomEvent | null; write: () => void; action?: 'created' | 'updated' }): CommitResult {
+  private commit(actor: string, requestId: string, hash: string, build: (seq: number) => { event: RoomEvent | null; write: () => void; action?: 'created' | 'updated' }, onStored?: () => void, onBroadcast?: () => void): CommitResult {
     const prior = this.db.receipt(actor, requestId)
     if (prior) {
       if (prior.payload_hash !== hash) throw new CommandFailure('REQUEST_ID_REUSED', '请求 ID 已用于另一操作')
@@ -63,8 +84,8 @@ export class RoomV2Commands {
       return { ...result, duplicate: true, event: null }
     }
     const meta = this.db.metaRow()
-    const room = this.db.meta()
-    if (!meta || !room || Date.parse(room.expiresAt) <= Date.now()) throw new CommandFailure('ROOM_EXPIRED', '房间已过期')
+    const expiresAt = this.db.roomExpiresAt()
+    if (!meta || !expiresAt || Date.parse(expiresAt) <= Date.now()) throw new CommandFailure('ROOM_EXPIRED', '房间已过期')
     const seq = meta.seq + 1
     const change = build(seq)
     const ack: MutationAck = { type: 'operation.ack', requestId, seq: change.event ? seq : meta.seq }
@@ -78,7 +99,9 @@ export class RoomV2Commands {
     } catch {
       throw new CommandFailure('PERSISTENCE_FAILED', '保存失败，请重试')
     }
+    onStored?.()
     if (change.event) this.publish(change.event)
+    onBroadcast?.()
     return result
   }
 

@@ -14,7 +14,7 @@ describe('Room V2 recovery contract', () => {
     const db: CommandStorage = {
       receipt: (actor, requestId) => receipts.get(`${actor}:${requestId}`) ?? null,
       metaRow: () => ({ room_json: '{}', seq, fear: 0, xcard_json: null }),
-      meta: () => ({ roomId: 'room-fixture', name: 'test', inviteCode: 'ABC123', createdAt: '2026-01-01', expiresAt: '2030-01-01', players: [], protocolVersion: 2 }),
+      roomExpiresAt: () => '2030-01-01',
       characterHeader: name => name === character.name ? { name, generation: 1, position: 0 } : null,
       resources: () => structuredClone(resources), nextPosition: () => 1,
       transaction: callback => callback(),
@@ -62,7 +62,7 @@ describe('Room V2 recovery contract', () => {
     const db: CommandStorage = {
       receipt: (actor, requestId) => receipts.get(`${actor}:${requestId}`) ?? null,
       metaRow: () => ({ room_json: '{}', seq, fear: 0, xcard_json: null }),
-      meta: () => ({ roomId: 'room', name: 'test', inviteCode: 'ABC123', createdAt: '2026-01-01', expiresAt: '2030-01-01', players: [], protocolVersion: 2 }),
+      roomExpiresAt: () => '2030-01-01',
       characterHeader: name => generation === null ? null : { name, generation, position: 0 },
       resources: () => resources ? structuredClone(resources) : null,
       nextPosition: () => 0,
