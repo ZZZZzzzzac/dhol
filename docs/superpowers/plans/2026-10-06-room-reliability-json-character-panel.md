@@ -397,14 +397,14 @@ npm --workspace fronted test -- src/__tests__/room-v2-client.test.ts
 
 **文件：** dhol 新建 `apps/realtime/src/character-ingest.ts` 和 `__tests__/character-ingest.test.ts`，修改入口与 README；车卡器新建 `lib/dhol-client.ts`、`components/modals/dhol-export-modal.tsx`、`tests/unit/dhol-client.test.ts`、`tests/unit/dhol-export-modal.test.tsx`，修改 `app/page.tsx`、`components/layout/bottom-dock.tsx`。
 
-- [ ] 增加六位房间码投递端点，房间码作为现有共享房间访问凭据。浏览器来源白名单包含车卡器实际域名；CORS 仅用于浏览器跨域许可，不把它当作身份认证。沿用加入房间等价的限速与有效期检查，不引入用户账号。
-- [ ] JSON 校验在变更前完成；同名替换在一个事务内完成。HTTP 重试沿用 Idempotency-Key；同一个发送动作的网络重试不能再次覆盖投递之后的资源标记。
-- [ ] 定义成功响应 `{ok:true, action:'created'|'updated', name, generation, seq}`；错误码包括 ROOM_NOT_FOUND、ROOM_EXPIRED、INVALID_CHARACTER、UNSUPPORTED_SCHEMA、PAYLOAD_TOO_LARGE、RATE_LIMITED、PERSISTENCE_FAILED。
-- [ ] 弹窗提供房间码、角色名、发送按钮和结果。只保存上次成功的房间码及配置地址；本轮发送中禁止重复点击，网络失败保留表单和原幂等 ID 以便重试。
-- [ ] 调用当前规则的 `prepareForExport(sheetData)`，发送完整 JSON。对手动再次点击发送的新动作使用新 ID，保证同名再投递仍按约定全覆盖。
-- [ ] zoot 入口和现有八位码不改，dhol 独立使用六位码。车卡器新入口仅发送到新电脑版房间，不再提供发送到旧电脑版或旧手机版的目的地；车卡器自身原有移动端能力不在此次清理范围内。
-- [ ] 覆盖前不额外增加强制确认弹窗；按钮旁永久说明覆盖全部资料和资源。成功后展示“已新增/已覆盖：角色名”。
-- [ ] 在同一次车卡器到面板的联调中抽查两个规则及一张自定义领域卡，确认关键字段与只读结果一致。
+- [x] 增加六位房间码投递端点，房间码作为现有共享房间访问凭据。浏览器来源白名单包含车卡器实际域名；CORS 仅用于浏览器跨域许可，不把它当作身份认证。沿用加入房间等价的限速与有效期检查，不引入用户账号。
+- [x] JSON 校验在变更前完成；同名替换在一个事务内完成。HTTP 重试沿用 Idempotency-Key；同一个发送动作的网络重试不能再次覆盖投递之后的资源标记。
+- [x] 定义成功响应 `{ok:true, action:'created'|'updated', name, generation, seq}`；错误码包括 ROOM_NOT_FOUND、ROOM_EXPIRED、INVALID_CHARACTER、UNSUPPORTED_SCHEMA、PAYLOAD_TOO_LARGE、RATE_LIMITED、PERSISTENCE_FAILED。
+- [x] 弹窗提供房间码、角色名、发送按钮和结果。只保存上次成功的房间码及配置地址；本轮发送中禁止重复点击，网络失败保留表单和原幂等 ID 以便重试。
+- [x] 调用当前规则的 `prepareForExport(sheetData)`，发送完整 JSON。对手动再次点击发送的新动作使用新 ID，保证同名再投递仍按约定全覆盖。
+- [x] zoot 入口和现有八位码不改，dhol 独立使用六位码。车卡器新入口仅发送到新电脑版房间，不再提供发送到旧电脑版或旧手机版的目的地；车卡器自身原有移动端能力不在此次清理范围内。
+- [x] 覆盖前不额外增加强制确认弹窗；按钮旁永久说明覆盖全部资料和资源。成功后展示“已新增/已覆盖：角色名”。
+- [x] 在同一次车卡器到面板的联调中抽查两个规则及一张自定义领域卡，确认关键字段与只读结果一致。
 
 ```powershell
 Set-Location D:\Dql\Desktop\dhol

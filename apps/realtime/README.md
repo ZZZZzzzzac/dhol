@@ -20,6 +20,13 @@ The Worker exposes:
 - `GET /api/rooms/:inviteCode/ws?token=...`
 - `GET /api/admin/rooms/:inviteCode`
 - `PATCH /api/admin/rooms/:inviteCode`
+- `POST /api/v2/rooms/:sixCharacterCode/characters` (requires `Idempotency-Key`)
+
+Browser character delivery uses the six-character Room V2 code. Configure its
+comma-separated browser origin allowlist with `CHARACTER_INGEST_ORIGINS`; this
+CORS setting is separate from `ALLOWED_ORIGIN` and is not an authentication
+mechanism. The production configuration includes the hosted character builder
+at `https://dhsheet.top`.
 
 ## Room administration
 

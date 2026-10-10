@@ -8,6 +8,7 @@ export interface RoomV2Env {
   ROOMS_V2: DurableObjectNamespace<RoomV2DurableObject>
   SESSION_SECRET: string
   ALLOWED_ORIGIN?: string
+  CHARACTER_INGEST_ORIGINS?: string
 }
 
 function json(body: unknown, status = 200): Response { return Response.json(body, { status }) }
@@ -70,12 +71,18 @@ export class RoomV2DurableObject extends DurableObject<RoomV2Env> {
       return json({ room: this.db.snapshot('', [], this.onlineIds())!.room, player: meta.players.at(-1) })
     }
     if (url.pathname === '/internal/v2/replace' && request.method === 'POST') {
-      if (this.expired()) return json({ code: 'ROOM_NOT_FOUND' }, 404)
+      const meta = this.db.meta()
+      if (!meta) return json({ code: 'ROOM_NOT_FOUND' }, 404)
+      if (Date.parse(meta.expiresAt) <= Date.now()) return json({ code: 'ROOM_EXPIRED' }, 410)
       const input = await request.json() as { requestId: string; sheet: CharacterSheetJson }
       try {
         const result = await this.commands.replace('delivery', input.requestId, input.sheet)
         return json({ ok: true, action: result.action, name: input.sheet.name.trim(), generation: result.ack.seq, seq: result.ack.seq })
-      } catch (error) { return json({ code: error instanceof CommandFailure ? error.code : 'PERSISTENCE_FAILED' }, 409) }
+      } catch (error) {
+        if (error instanceof CommandFailure && error.code === 'ROOM_EXPIRED') return json({ code: 'ROOM_EXPIRED' }, 410)
+        if (error instanceof CommandFailure && error.code === 'REQUEST_ID_REUSED') return json({ code: 'INVALID_CHARACTER' }, 409)
+        return json({ code: 'PERSISTENCE_FAILED' }, 503)
+      }
     }
     const session = await this.session(request)
     if (!session) return json({ code: 'UNAUTHORIZED' }, 401)

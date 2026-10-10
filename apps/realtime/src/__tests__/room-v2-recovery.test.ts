@@ -1,7 +1,8 @@
 import { describe, expect, it } from 'vitest'
 import { createRoomV2Fixture } from '../../../../packages/shared/src/__tests__/fixtures/room-v2-fixture'
+import daggerheart from '../../../../packages/shared/src/__tests__/fixtures/daggerheart-sheet.json'
 import { RoomV2Commands, type CommandStorage } from '../room-v2-commands'
-import type { CharacterResources } from '@dhgc/shared/desktop'
+import { resourcesFromSheet, type CharacterResources, type CharacterSheetJson } from '@dhgc/shared/desktop'
 
 describe('Room V2 recovery contract', () => {
   const initialRoom = createRoomV2Fixture()
@@ -50,5 +51,45 @@ describe('Room V2 recovery contract', () => {
     expect(second.ack).toEqual(first.ack)
     expect(second.duplicate).toBe(true)
     expect(room.seq()).toBe(2)
+  })
+
+  it('does not overwrite later resource marks when the original delivery is retried', async () => {
+    let seq = 0
+    let generation: number | null = null
+    let resources: CharacterResources | null = null
+    const receipts = new Map<string, { payload_hash: string; seq: number; result_json: string }>()
+    const sheet = daggerheart as CharacterSheetJson
+    const db: CommandStorage = {
+      receipt: (actor, requestId) => receipts.get(`${actor}:${requestId}`) ?? null,
+      metaRow: () => ({ room_json: '{}', seq, fear: 0, xcard_json: null }),
+      meta: () => ({ roomId: 'room', name: 'test', inviteCode: 'ABC123', createdAt: '2026-01-01', expiresAt: '2030-01-01', players: [], protocolVersion: 2 }),
+      characterHeader: name => generation === null ? null : { name, generation, position: 0 },
+      resources: () => resources ? structuredClone(resources) : null,
+      nextPosition: () => 0,
+      transaction: callback => callback(),
+      advance: next => { seq = next },
+      saveReceipt: (actor, requestId, hash, receiptSeq, result) => { receipts.set(`${actor}:${requestId}`, { payload_hash: hash, seq: receiptSeq, result_json: JSON.stringify(result) }) },
+      saveResources: (_name, next) => { resources = structuredClone(next) },
+      saveCharacter: (_name, nextGeneration, _position, delivered) => {
+        generation = nextGeneration
+        resources = structuredClone(resourcesFromSheet(delivered))
+      },
+      deleteCharacter: () => undefined, saveDice: () => undefined, clearDice: () => undefined,
+    }
+    const commands = new RoomV2Commands(db, () => undefined)
+
+    const first = await commands.replace('delivery', 'delivery-1', sheet)
+    await commands.mutate('player-a', '甲', {
+      type: 'character.setMark', protocolVersion: 2, requestId: 'mark-1',
+      name: sheet.name, generation: first.ack.seq, resource: 'stress', index: 0, marked: true,
+    })
+    const markedSeq = seq
+    const retry = await new RoomV2Commands(db, () => undefined).replace('delivery', 'delivery-1', sheet)
+
+    expect(db.resources(sheet.name)?.stress[0]).toBe(true)
+    expect(seq).toBe(markedSeq)
+    expect(retry.ack).toEqual(first.ack)
+    expect(retry.action).toBe(first.action)
+    expect(retry.duplicate).toBe(true)
   })
 })

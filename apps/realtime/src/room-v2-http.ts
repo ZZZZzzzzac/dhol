@@ -1,20 +1,10 @@
-import { parseCharacterDelivery, CharacterValidationError, MAX_CHARACTER_REQUEST_BYTES, type RoomV2Model } from '@dhgc/shared/desktop'
+import type { RoomV2Model } from '@dhgc/shared/desktop'
+import { roomV2RateLimited } from './character-ingest'
 import { signRoomV2Session } from './room-v2-session'
 import type { RoomV2Env } from './room-v2'
 import type { StoredMeta } from './room-v2-storage'
 
 const CODE_ALPHABET = 'ABCDEFGHJKLMNPQRSTUVWXYZ23456789'
-const limits = new Map<string, { count: number; until: number }>()
-
-function limited(request: Request): boolean {
-  const key = request.headers.get('CF-Connecting-IP') ?? 'local'
-  const now = Date.now()
-  const current = limits.get(key)
-  if (!current || current.until < now) { limits.set(key, { count: 1, until: now + 60_000 }); return false }
-  current.count++
-  return current.count > 20
-}
-
 function code(): string {
   const bytes = new Uint8Array(6)
   crypto.getRandomValues(bytes)
@@ -28,27 +18,6 @@ function text(value: unknown, max: number): string { return typeof value === 'st
 function originAllowed(request: Request, env: RoomV2Env): boolean {
   const origin = request.headers.get('origin')
   return !origin || !env.ALLOWED_ORIGIN || origin === env.ALLOWED_ORIGIN
-}
-
-async function boundedText(request: Request): Promise<string> {
-  const reader = request.body?.getReader()
-  if (!reader) return ''
-  const chunks: Uint8Array[] = []
-  let size = 0
-  while (true) {
-    const { done, value } = await reader.read()
-    if (done) break
-    size += value.byteLength
-    if (size > MAX_CHARACTER_REQUEST_BYTES) {
-      await reader.cancel()
-      throw new CharacterValidationError('PAYLOAD_TOO_LARGE', '请求超过 544 KiB')
-    }
-    chunks.push(value)
-  }
-  const combined = new Uint8Array(size)
-  let offset = 0
-  for (const chunk of chunks) { combined.set(chunk, offset); offset += chunk.byteLength }
-  return new TextDecoder().decode(combined)
 }
 
 function cors(request: Request, env: RoomV2Env, result: Response): Response {
@@ -74,7 +43,7 @@ async function sessionResponse(request: Request, env: RoomV2Env, room: RoomV2Mod
 }
 
 async function create(request: Request, env: RoomV2Env): Promise<Response> {
-  if (limited(request)) return response({ code: 'RATE_LIMITED' }, 429)
+  if (roomV2RateLimited(request)) return response({ code: 'RATE_LIMITED' }, 429)
   let input: Record<string, unknown>
   try { input = await request.json() as Record<string, unknown> } catch { return response({ code: 'VALIDATION_ERROR' }, 400) }
   const name = text(input.room_name ?? input.name, 60) || 'Untitled Room'
@@ -99,7 +68,7 @@ async function create(request: Request, env: RoomV2Env): Promise<Response> {
 }
 
 async function join(request: Request, env: RoomV2Env): Promise<Response> {
-  if (limited(request)) return response({ code: 'RATE_LIMITED' }, 429)
+  if (roomV2RateLimited(request)) return response({ code: 'RATE_LIMITED' }, 429)
   let input: Record<string, unknown>
   try { input = await request.json() as Record<string, unknown> } catch { return response({ code: 'VALIDATION_ERROR' }, 400) }
   const inviteCode = text(input.invite_code ?? input.inviteCode, 6).toUpperCase()
@@ -125,32 +94,15 @@ export async function routeRoomV2(request: Request, env: RoomV2Env): Promise<Res
     if (!match) return cors(request, env, response({ code: 'NOT_FOUND' }, 404))
     const inviteCode = match[1].toUpperCase()
     const tail = match[2] ?? ''
-    if (tail === '/characters' && request.method === 'POST') {
-      if (limited(request)) result = response({ code: 'RATE_LIMITED' }, 429)
-      else if (!/^[\w-]{1,128}$/.test(request.headers.get('Idempotency-Key') ?? '')) result = response({ code: 'INVALID_COMMAND' }, 400)
-      else {
-        const length = Number(request.headers.get('content-length') ?? 0)
-        if (length > MAX_CHARACTER_REQUEST_BYTES) result = response({ code: 'PAYLOAD_TOO_LARGE' }, 413)
-        else {
-          try {
-            const delivery = parseCharacterDelivery(await boundedText(request))
-            result = await stub(env, inviteCode).fetch(internal('/internal/v2/replace', { method: 'POST', body: JSON.stringify({ requestId: request.headers.get('Idempotency-Key'), sheet: delivery.sheet }) }))
-          } catch (error) {
-            result = response({ code: error instanceof CharacterValidationError ? error.code : 'INVALID_CHARACTER', message: error instanceof Error ? error.message : '无效角色' }, error instanceof CharacterValidationError && error.code === 'PAYLOAD_TOO_LARGE' ? 413 : 400)
-          }
-        }
-      }
-    } else {
-      const token = url.searchParams.get('token')
-      const headers = token ? { Authorization: `Bearer ${token}` } : { Authorization: request.headers.get('authorization') ?? '' }
-      if (tail === '/ws' && request.headers.get('Upgrade')?.toLowerCase() === 'websocket') {
-        return stub(env, inviteCode).fetch(internal(`/internal/v2/ws?${url.searchParams.toString()}`, { headers: request.headers }))
-      }
-      if (tail === '/snapshot' && request.method === 'GET') result = await stub(env, inviteCode).fetch(internal('/internal/v2/snapshot', { headers }))
-      else if (tail === '/export' && request.method === 'GET') result = await stub(env, inviteCode).fetch(internal('/internal/v2/export', { headers }))
-      else if (tail.startsWith('/characters/') && request.method === 'GET') result = await stub(env, inviteCode).fetch(internal(`/internal/v2${tail}?${url.searchParams.toString()}`, { headers }))
-      else result = response({ code: 'NOT_FOUND' }, 404)
+    const token = url.searchParams.get('token')
+    const headers = token ? { Authorization: `Bearer ${token}` } : { Authorization: request.headers.get('authorization') ?? '' }
+    if (tail === '/ws' && request.headers.get('Upgrade')?.toLowerCase() === 'websocket') {
+      return stub(env, inviteCode).fetch(internal(`/internal/v2/ws?${url.searchParams.toString()}`, { headers: request.headers }))
     }
+    if (tail === '/snapshot' && request.method === 'GET') result = await stub(env, inviteCode).fetch(internal('/internal/v2/snapshot', { headers }))
+    else if (tail === '/export' && request.method === 'GET') result = await stub(env, inviteCode).fetch(internal('/internal/v2/export', { headers }))
+    else if (tail.startsWith('/characters/') && request.method === 'GET') result = await stub(env, inviteCode).fetch(internal(`/internal/v2${tail}?${url.searchParams.toString()}`, { headers }))
+    else result = response({ code: 'NOT_FOUND' }, 404)
   }
   return cors(request, env, result)
 }

@@ -20,6 +20,7 @@ new_sqlite_classes = ["RoomV2DurableObject"]
 
 [vars]
 ALLOWED_ORIGIN = "https://screenol.pages.dev"
+CHARACTER_INGEST_ORIGINS = "https://dhsheet.top"
 
 # Bind this after creating the D1 database:
 # [[d1_databases]]
