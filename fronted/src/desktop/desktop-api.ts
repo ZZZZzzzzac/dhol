@@ -9,5 +9,9 @@ export interface DesktopSession {
 
 export function apiBase(): string {
   const configured = import.meta.env.VITE_REALTIME_API_BASE
-  return typeof configured === 'string' && configured.trim() ? configured.replace(/\/$/, '') : import.meta.env.DEV ? 'http://127.0.0.1:8787' : window.location.origin
+  return typeof configured === 'string' && configured.trim()
+    ? configured.replace(/\/$/, '')
+    : import.meta.env.DEV
+      ? 'http://127.0.0.1:8787'
+      : 'https://dhol-realtime.gooole-dql.workers.dev'
 }

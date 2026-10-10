@@ -102,7 +102,7 @@
 
 ## 测试入口
 
-本地 Vite 开发服务器的 `/preview` 展示独立的新版桌面测试入口，根路径继续展示公告。在 Pages 的专用测试构建中设置构建环境变量 `VITE_ENABLE_PREVIEW=true` 后，`/preview` 同样可进入；正式构建未设置该变量时不会开放此路由。该路径只是测试开关，不承担身份认证；要限制测试人员访问，应在 Pages/Cloudflare Access 层配置访问规则。阶段七继续完成四卡布局和只读完整卡。
+本地 Vite 开发服务器的 `/preview` 展示独立的新版桌面测试入口，根路径继续展示公告。2026-10-10 为用户线上自测制作的 Pages 构建设置了 `VITE_ENABLE_PREVIEW=true`，并在 Pages 根中间件对 `/preview` 使用 `PREVIEW_PASSWORD` 口令保护；口令只存在 Cloudflare Secret 和测试者手中，不提交仓库。公开根路径继续显示公告。该入口仍是阶段五功能测试版，阶段七继续完成四卡布局和只读完整卡。
 
 2026-10-09 本地浏览器检查：`http://localhost:5173/` 显示“当前项目技术升级中”；`http://localhost:5173/preview` 显示房间创建与加入界面。该检查没有创建房间或访问生产用户数据。
 
@@ -119,3 +119,11 @@
 浏览器检查使用 Playwright CLI 打开本地 Vite `/preview` 并连接本地 Wrangler：创建新版房间后显示“已连接 · 已保存”，点击恐惧 `+` 与 d20 后看到正式状态和骰子记录；投递合成角色后在线出现摘要资源按钮，标记首个生命格、刷新页面，已确认标记仍在。页面控制台无错误或警告。该入口只用于阶段五闭环，不代表阶段七的卡面与适配布局已经验收。
 
 断线复测时主动停止本地 Wrangler：浏览器改为“正在连接”，修改按钮禁用；重启 Wrangler 后同一页面恢复“已连接 · 已保存”。停服期间控制台出现预期的连接拒绝，恢复后没有 `Illegal invocation`。此复测发现并修正了浏览器计时器脱离调用上下文的问题。
+
+## 线上受保护测试入口（2026-10-10）
+
+用户要求在 `screenol.pages.dev` 继续显示升级公告的同时进行线上自测，因此提前部署阶段四、五的最小闭环；这不是阶段九正式上线，也没有删除旧房间存储。Worker `dhol-realtime` 版本 `857c554e-7a9c-4bea-9acc-2d8fc3ae955f` 新增 `ROOMS_V2`，原 `ROOMS` 保留。Pages 项目 `screenol` 的测试部署为 `6ea0a8dd.screenol.pages.dev`，正式域名仍为 `screenol.pages.dev`。生产设置了独立的 `SESSION_SECRET` 和 Pages `PREVIEW_PASSWORD`，只记录密钥名称，不记录值。Worker 仅接受 `https://screenol.pages.dev` 的浏览器 Origin。
+
+公开根路径 HTTP 200、标题仍为“技术升级中｜角色卡在线追踪”；匿名访问 `/preview` 返回 401，正确口令返回 200。测试页未在首页链接，HTML 含 `noindex,nofollow`。测试页直接连接 `dhol-realtime.gooole-dql.workers.dev`，避免浏览器在 Pages 代理 WebSocket 握手时混入 Basic 认证。页面认证仅保护 UI 入口；静态资产和 Worker API 并非私有网络资源，不应以地址不公开代替房间令牌权限。
+
+以合成角色运行 `ROOM_V2_BASE=https://screenol.pages.dev` 的 `room-v2-smoke.mjs`，两条线上 WebSocket、投递、并发标记、骰子、receipt 去重、历史裁剪及同名替换均通过（最终 seq 59、角色 1、骰子历史 50）。Playwright 在受保护入口创建线上合成房间，看到“已连接 · 已保存”；恐惧 +1 和 d20 成功，刷新后重新连接并恢复同一状态。浏览器最终一次加载没有控制台错误。线上合成房间按默认三天过期；未导入用户数据。

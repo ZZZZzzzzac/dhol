@@ -18,10 +18,8 @@ new_sqlite_classes = ["RoomDurableObject"]
 tag = "v2-json-desktop"
 new_sqlite_classes = ["RoomV2DurableObject"]
 
-# 生产环境必须设置 ALLOWED_ORIGIN，值为前端域名（如 https://dhol.pages.dev）
-# 在 Cloudflare Dashboard > Workers & Pages > dhol-realtime > Settings > Variables 中添加
-# [vars]
-# ALLOWED_ORIGIN = "https://dhol.pages.dev"
+[vars]
+ALLOWED_ORIGIN = "https://screenol.pages.dev"
 
 # Bind this after creating the D1 database:
 # [[d1_databases]]
