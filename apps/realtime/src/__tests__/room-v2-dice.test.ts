@@ -1,9 +1,10 @@
 import { describe, expect, it } from 'vitest'
 import daggerheart from '../../../../packages/shared/src/__tests__/fixtures/daggerheart-sheet.json'
 import type { CharacterSheetJson, DiceRollRecord, RoomEvent } from '@dhgc/shared/desktop'
-import { RoomV2Commands, type CommandStorage, type RollCommandMetric } from '../room-v2-commands'
+import { RoomV2Commands, type CommandStorage, type RollCommandMetric, type RoomV2CommandOptions } from '../room-v2-commands'
+import { RoomV2DurableObject } from '../room-v2'
 
-function fixture() {
+function fixture(options: RoomV2CommandOptions = {}, persistenceOrder?: string[]) {
   let seq = 0
   let activeTransactions = 0
   const receipts = new Map<string, { payload_hash: string; seq: number; result_json: string }>()
@@ -18,16 +19,16 @@ function fixture() {
     resources: () => null,
     nextPosition: () => 0,
     transaction: callback => { activeTransactions++; try { return callback() } finally { activeTransactions-- } },
-    advance: next => { seq = next },
-    saveReceipt: (actor, requestId, hash, receiptSeq, result) => receipts.set(`${actor}:${requestId}`, { payload_hash: hash, seq: receiptSeq, result_json: JSON.stringify(result) }),
+    advance: next => { persistenceOrder?.push(`advance:${next}`); seq = next },
+    saveReceipt: (actor, requestId, hash, receiptSeq, result) => { persistenceOrder?.push(`receipt:${requestId}`); receipts.set(`${actor}:${requestId}`, { payload_hash: hash, seq: receiptSeq, result_json: JSON.stringify(result) }) },
     saveResources: () => undefined,
     saveCharacter: () => undefined,
     deleteCharacter: () => undefined,
-    saveDice: (_seq, roll) => { expect(activeTransactions).toBe(1); dice.push(roll) },
+    saveDice: (rollSeq, roll) => { expect(activeTransactions).toBe(1); persistenceOrder?.push(`save:${rollSeq}:${roll.actor_name}`); dice.push(roll) },
     clearDice: () => undefined,
   }
-  const commands = new RoomV2Commands(db, event => { expect(activeTransactions).toBe(0); events.push(event) }, { onRollMetric: metric => metrics.push(metric) })
-  return { commands, dice, events, metrics }
+  const commands = new RoomV2Commands(db, event => { expect(activeTransactions).toBe(0); persistenceOrder?.push(`publish:${event.seq}`); events.push(event) }, { ...options, onRollMetric: metric => { metrics.push(metric); options.onRollMetric?.(metric) } })
+  return { commands, db, dice, events, metrics, receipts, seq: () => seq }
 }
 
 const standardRoll = (requestId: string) => ({
@@ -38,6 +39,51 @@ const standardRoll = (requestId: string) => ({
 })
 
 describe('Room V2 dice hot path', () => {
+  it('authorizes a WebSocket roll without reading or parsing the complete room metadata', async () => {
+    const sent: unknown[] = []
+    const session = { aud: 'dhol-room-v2', roomId: 'room', inviteCode: 'ABC123', playerId: 'player-a', nickname: '甲', exp: Math.floor(Date.now() / 1000) + 60 }
+    const room = Object.create(RoomV2DurableObject.prototype) as unknown as {
+      db: Record<string, unknown>
+      commands: Record<string, unknown>
+      webSocketMessage(socket: WebSocket, data: string | ArrayBuffer): Promise<void>
+    }
+    room.db = {
+      meta: () => { throw new Error('complete meta must stay cold') },
+      sessionAccess: (playerId: string) => ({ roomId: 'room', inviteCode: 'ABC123', expiresAt: '2030-01-01T00:00:00.000Z', member: playerId === 'player-a' }),
+    }
+    room.commands = { mutate: async () => ({ ack: { type: 'operation.ack', requestId: 'roll-hot', seq: 1 }, event: null, duplicate: false }) }
+    const socket = {
+      deserializeAttachment: () => session,
+      send: (value: string) => sent.push(JSON.parse(value)),
+      close: () => { throw new Error('valid session must not close') },
+    }
+
+    await room.webSocketMessage(socket as unknown as WebSocket, JSON.stringify(standardRoll('roll-hot')))
+    expect(sent).toEqual([{ type: 'operation.ack', requestId: 'roll-hot', seq: 1 }])
+  })
+
+  it.each([
+    [{ roomId: 'room', inviteCode: 'ABC123', expiresAt: '2030-01-01T00:00:00.000Z', member: false }, 'Session expired'],
+    [{ roomId: 'another-room', inviteCode: 'ABC123', expiresAt: '2030-01-01T00:00:00.000Z', member: true }, 'Session expired'],
+    [{ roomId: 'room', inviteCode: 'ABC123', expiresAt: '2020-01-01T00:00:00.000Z', member: true }, 'Room expired'],
+  ])('rejects missing membership, mismatched rooms, and expired rooms using minimal access data', async (access, expectedReason) => {
+    const room = Object.create(RoomV2DurableObject.prototype) as unknown as {
+      db: Record<string, unknown>
+      commands: Record<string, unknown>
+      webSocketMessage(socket: WebSocket, data: string | ArrayBuffer): Promise<void>
+    }
+    room.db = { meta: () => { throw new Error('complete meta must stay cold') }, sessionAccess: () => access }
+    room.commands = { mutate: async () => { throw new Error('unauthorized command reached commit') } }
+    const closed: string[] = []
+    const socket = {
+      deserializeAttachment: () => ({ aud: 'dhol-room-v2', roomId: 'room', inviteCode: 'ABC123', playerId: 'player-a', nickname: '甲', exp: Math.floor(Date.now() / 1000) + 60 }),
+      send: () => undefined,
+      close: (_code: number, reason: string) => { closed.push(reason) },
+    }
+    await room.webSocketMessage(socket as unknown as WebSocket, JSON.stringify(standardRoll('rejected')))
+    expect(closed).toEqual([expectedReason])
+  })
+
   it('persists once, then gives initiator and observers the same formal roll', async () => {
     const room = fixture()
     const result = await room.commands.mutate('player-a', '甲', standardRoll('roll-1'))
@@ -80,8 +126,43 @@ describe('Room V2 dice hot path', () => {
     )
   })
 
-  it('serializes fifty rolls with concurrent large character replacements and reports queue time', async () => {
-    const room = fixture()
+  it('preserves arrival order while hashing, then stores before broadcasting with observable queue time', async () => {
+    let clock = 0
+    let releaseFirst!: () => void
+    const firstHash = new Promise<void>(resolve => { releaseFirst = resolve })
+    const hashOrder: string[] = []
+    const persistenceOrder: string[] = []
+    const room = fixture({
+      now: () => clock++,
+      hash: async value => {
+        const requestId = (value as { requestId: string }).requestId
+        hashOrder.push(requestId)
+        if (requestId === 'first') await firstHash
+        return requestId
+      },
+    }, persistenceOrder)
+    const first = room.commands.mutate('player-a', '甲', standardRoll('first'))
+    const second = room.commands.mutate('player-b', '乙', standardRoll('second'))
+    await Promise.resolve()
+    expect(hashOrder).toEqual(['first'])
+    releaseFirst()
+    await Promise.all([first, second])
+
+    expect(hashOrder).toEqual(['first', 'second'])
+    expect(room.events.map(event => event.seq)).toEqual([1, 2])
+    expect(room.dice.map(roll => roll.actor_name)).toEqual(['甲', '乙'])
+    expect(room.seq()).toBe(2)
+    expect([...room.receipts.values()].map(receipt => receipt.seq)).toEqual([1, 2])
+    expect(persistenceOrder).toEqual([
+      'save:1:甲', 'advance:1', 'receipt:first', 'publish:1',
+      'save:2:乙', 'advance:2', 'receipt:second', 'publish:2',
+    ])
+    expect(room.metrics[1].queueMs).toBeGreaterThan(0)
+  })
+
+  it('serializes fifty rolls with concurrent large character replacements and reports positive queue time', async () => {
+    let clock = 0
+    const room = fixture({ now: () => clock++ })
     const largeSheet = { ...daggerheart, name: '压力角色', stageEightLoad: '测'.repeat(200_000) } as unknown as CharacterSheetJson
     const work: Promise<unknown>[] = []
     for (let index = 0; index < 50; index++) {
@@ -93,6 +174,6 @@ describe('Room V2 dice hot path', () => {
     expect(room.dice).toHaveLength(50)
     expect(new Set(room.dice.map(roll => roll.id))).toHaveLength(50)
     expect(room.metrics).toHaveLength(50)
-    expect(room.metrics.some(metric => metric.queueMs >= 0)).toBe(true)
+    expect(room.metrics.slice(1).some(metric => metric.queueMs > 0)).toBe(true)
   })
 })

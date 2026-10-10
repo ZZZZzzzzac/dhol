@@ -12,6 +12,7 @@ export interface CommitResult { ack: MutationAck; event: RoomEvent | null; dupli
 export type CommandStorage = Pick<RoomV2Storage, 'receipt' | 'metaRow' | 'roomExpiresAt' | 'characterHeader' | 'resources' | 'nextPosition' | 'transaction' | 'advance' | 'saveReceipt' | 'saveResources' | 'saveCharacter' | 'deleteCharacter' | 'saveDice' | 'clearDice'>
 export interface RoomV2CommandOptions {
   now?: () => number
+  hash?: (value: unknown) => Promise<string>
   onRollMetric?: (metric: RollCommandMetric) => void
 }
 
@@ -37,11 +38,13 @@ function randomInt(max: number): number {
 export class RoomV2Commands {
   private tail: Promise<unknown> = Promise.resolve()
   private readonly now: () => number
+  private readonly hash: (value: unknown) => Promise<string>
   constructor(private readonly db: CommandStorage, private readonly publish: (event: RoomEvent) => void, private readonly options: RoomV2CommandOptions = {}) {
     this.now = options.now ?? (() => performance.now())
+    this.hash = options.hash ?? payloadHash
   }
 
-  private enqueue<T>(operation: () => T): Promise<T> {
+  private enqueue<T>(operation: () => Promise<T>): Promise<T> {
     const result = this.tail.then(operation, operation)
     this.tail = result.catch(() => undefined)
     return result
@@ -49,9 +52,9 @@ export class RoomV2Commands {
 
   async mutate(actor: string, nickname: string, command: MutationCommand): Promise<CommitResult> {
     const receivedAtMs = this.now()
-    const hash = await payloadHash(command)
-    return this.enqueue(() => {
+    return this.enqueue(async () => {
       const queuedAtMs = this.now()
+      const hash = await this.hash(command)
       let storedAtMs = queuedAtMs
       let broadcastAtMs = queuedAtMs
       const result = this.commit(actor, command.requestId, hash, this.applyCommand(actor, nickname, command), () => { storedAtMs = this.now() }, () => { broadcastAtMs = this.now() })
@@ -65,15 +68,17 @@ export class RoomV2Commands {
 
   async replace(actor: string, requestId: string, sheet: CharacterSheetJson): Promise<CommitResult> {
     const name = characterNameKey(sheet.name)
-    const hash = await payloadHash({ type: 'character.replace', sheet })
-    return this.enqueue(() => this.commit(actor, requestId, hash, seq => {
-      const previous = this.db.characterHeader(name)
-      const position = previous?.position ?? this.db.nextPosition()
-      const resources = resourcesFromSheet(sheet)
-      const summary = summaryFromSheet(sheet, resources, seq, position)
-      const event: RoomEvent = { type: 'character.replaced', requestId, seq, name, generation: seq, summary }
-      return { event, write: () => this.db.saveCharacter(name, seq, position, sheet, summary, resources), action: previous ? 'updated' as const : 'created' as const }
-    }))
+    return this.enqueue(async () => {
+      const hash = await this.hash({ type: 'character.replace', sheet })
+      return this.commit(actor, requestId, hash, seq => {
+        const previous = this.db.characterHeader(name)
+        const position = previous?.position ?? this.db.nextPosition()
+        const resources = resourcesFromSheet(sheet)
+        const summary = summaryFromSheet(sheet, resources, seq, position)
+        const event: RoomEvent = { type: 'character.replaced', requestId, seq, name, generation: seq, summary }
+        return { event, write: () => this.db.saveCharacter(name, seq, position, sheet, summary, resources), action: previous ? 'updated' as const : 'created' as const }
+      })
+    })
   }
 
   private commit(actor: string, requestId: string, hash: string, build: (seq: number) => { event: RoomEvent | null; write: () => void; action?: 'created' | 'updated' }, onStored?: () => void, onBroadcast?: () => void): CommitResult {

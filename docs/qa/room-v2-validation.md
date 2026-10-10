@@ -151,11 +151,11 @@
 
 本地契约压力测试同时发起 50 次普通掷骰与 10 次约 200 KiB 合成角色替换，并另跑 20 组双客户端事件副本核对；全部正式 roll ID、结果和持久化记录一致。普通 `1d20` 事件断言不超过 2 KiB；最大允许骰池按实际 JSON 字节记录并保留每个结果，不截断来迎合体积目标。服务端现在为每次非重复正式掷骰记录进入、出队、事务成功、广播完成和事件字节数；日志不含角色资料、邀请码或会话令牌。排队测量覆盖角色替换造成的串行等待，没有改变已确认的“事务成功后广播”顺序。
 
-热路径只读取 receipt、单行房间 seq/fear/x-card 和用 SQLite `json_extract` 取得的到期时间；它不读取角色 source JSON、不生成快照、不恢复 HTML，也不编译界面。掷骰仍唯一由服务端 `crypto.getRandomValues` 和共享纯函数生成；前端待确认状态只显示“掷骰中…”。正式事件直接更新本机 confirmed store 并清除 outbox，不重新获取全房间；该过程从两次 UI 通知收敛为一次。8 秒 confirmation timer 仅在事件/ACK 缺失时请求同步，不延后正式结果或历史写入，也不是五秒动画窗口。
+WebSocket 消息外层用一条 SQL `json_extract` / `json_each` 查询取得 room ID、邀请码、到期时间和指定 player ID 的成员资格，在 JavaScript 中不读取或 `JSON.parse` 完整 `room_json`；命令层再读取 receipt、单行 seq/fear/x-card 和到期时间。热路径不读取角色 source JSON、不生成快照、不恢复 HTML，也不编译界面。会话仍同时验证签名 token 的有效期、room ID、邀请码、成员资格和房间到期时间，没有以优化为由弱化授权。掷骰仍唯一由服务端 `crypto.getRandomValues` 和共享纯函数生成；前端待确认状态只显示“掷骰中…”。正式事件直接更新本机 confirmed store 并清除 outbox，不重新获取全房间；该过程从两次 UI 通知收敛为一次。8 秒 confirmation timer 仅在事件/ACK 缺失时请求同步，不延后正式结果或历史写入，也不是五秒动画窗口。
 
 阶段四、五既有 ACK 丢失、持久化失败、断线重试与快照补洞测试继续复用，没有新增同义故障注入。阶段八新增的失败证据为：后端新测试最初 3/3 因热路径仍调用完整 `meta()` 失败；同步测试最初发现单个正式骰子事件产生 2 次 UI 通知而失败。改为最小到期字段读取和合并通知后均通过。
 
-`scripts/check-desktop-boundaries.mjs` 从 `DesktopApp.tsx`、`RoomV2DurableObject` 所在模块和 `@dhgc/shared/desktop` 三个入口出发，调用 TypeScript 模块解析器处理相对路径、`@` 别名、package exports 和 barrel 再遍历传递依赖。到达旧 App/pages/store、旧房间类型、旧实时客户端、HTML 解析或移动角色码即失败；另检查候选前端不存在旧实现文件。本次遍历 33 个模块通过。Worker `index.ts` 暂留的 `RoomDurableObject` 导出和旧 fallback 只服务现有部署生命周期；新版路由与 `RoomV2DurableObject` 的入口图均未到达旧类。最终移除旧导出和独立环境部署属于需要明确测试目标的后续清理，不在本阶段越权执行。
+`scripts/check-desktop-boundaries.mjs` 从 `DesktopApp.tsx`、`RoomV2DurableObject` 所在模块和 `@dhgc/shared/desktop` 三个入口出发，调用 TypeScript 模块解析器处理相对路径、`@` 别名、package exports、barrel 和动态 import 后遍历传递依赖。到达旧 App/pages/store、旧房间类型、旧实时客户端、HTML 解析、移动角色码、`legacy-room.ts` 或旧共享 `types.ts` / `protocol.ts` / `utils.ts` 即失败；另检查候选前端不存在旧实现文件。本次正常入口遍历 33 个模块通过。负向夹具通过 barrel 和动态 import 实际连接四个旧后端/共享模块，`node --test scripts/__tests__/check-desktop-boundaries.test.mjs` 确认四条路径都会被报告。Worker `index.ts` 暂留的 `RoomDurableObject` 导出和旧 fallback 只服务现有部署生命周期；新版路由与 `RoomV2DurableObject` 的入口图均未到达旧类。最终移除旧导出和独立环境部署属于需要明确测试目标的后续清理，不在本阶段越权执行。
 
 候选前端已删除旧 `App`、pages、store、lib、preview、components、types、utils、旧测试、旧静态资源和旧全局样式。依赖只保留 React、React DOM、Zustand 及构建/测试工具；移除 Radix、React Flow、Tailwind、Framer Motion、Lucide、nanoid、clsx、CVA 和平台专用可选包。生产 CSS 从删除前的 83.66 kB 降为 12.96 kB，候选仍可独立构建。
 
@@ -166,4 +166,10 @@
 - 通用 UI 运行时：React、React DOM；状态容器仅使用 `zustand/vanilla`，传递依赖图未到达旧 store。
 - 加密工具：运行时原生 Web Crypto（随机数、UUID、SHA-256、会话签名）；不引入旧客户端或第三方加密包。
 
-验证结果：阶段八后端定向 4/4、前端定向 8/8；传递依赖检查通过；前端生产构建与 Worker TypeScript 检查通过。由于没有公网数据，没有打开浏览器 profiler，也没有声称满足 P50 ≤ 300 ms、P95 ≤ 800 ms 或冷启动 P95 ≤ 1500 ms。
+验证结果：阶段八后端定向 9/9、前端定向 8/8；传递依赖检查及负向自测通过；前端生产构建与 Worker TypeScript 检查通过。由于没有公网数据，没有打开浏览器 profiler，也没有声称满足 P50 ≤ 300 ms、P95 ≤ 800 ms 或冷启动 P95 ≤ 1500 ms。
+
+### 阶段八规格复审修正
+
+补充的 TDD 红灯记录：WebSocket 热路径测试最初因调用 `db.meta()` 抛出“complete meta must stay cold”；到达顺序测试因可控 hash 未进入串行队列而得到空的 hash 顺序；边界负向自测最初错误返回正常入口通过，未报告四个旧模块。修正后，hash 在命令调用时立即占据队列位置，再于事务前完成；并发大、小 payload 不会因 SHA-256 完成先后交换提交顺序。可控时钟确认后续命令 `queueMs > 0`，记录器确认每个 seq 均严格执行 `save dice → advance seq → save receipt → publish`，最终骰子、receipt 和 seq 一致。
+
+香港独立环境与真实双浏览器延迟仍保持“待测”；本次复审修正没有部署或修改任何外部状态，也没有新增延迟达标声明。

@@ -16,6 +16,8 @@ type CharacterHeader = Pick<CharacterRow, 'name' | 'generation' | 'position'>
 type ResourceRow = { resources_json: string }
 type DiceRow = { record_json: string }
 type ReceiptRow = { payload_hash: string; seq: number; result_json: string }
+type SessionAccessRow = { room_id: string; invite_code: string; expires_at: string; member: number }
+export interface RoomV2SessionAccess { roomId: string; inviteCode: string; expiresAt: string; member: boolean }
 
 export class RoomV2Storage {
   private deleted = false
@@ -48,6 +50,22 @@ export class RoomV2Storage {
     if (this.deleted) return null
     const row = this.storage.sql.exec<{ expires_at: string | null }>("SELECT json_extract(room_json, '$.expiresAt') AS expires_at FROM panel_v2_meta WHERE id = 1").toArray()[0]
     return row?.expires_at ?? null
+  }
+
+  sessionAccess(playerId: string): RoomV2SessionAccess | null {
+    if (this.deleted) return null
+    const row = this.storage.sql.exec<SessionAccessRow>(`
+      SELECT
+        json_extract(room_json, '$.roomId') AS room_id,
+        json_extract(room_json, '$.inviteCode') AS invite_code,
+        json_extract(room_json, '$.expiresAt') AS expires_at,
+        EXISTS (
+          SELECT 1 FROM json_each(room_json, '$.players')
+          WHERE json_extract(value, '$.id') = ?
+        ) AS member
+      FROM panel_v2_meta WHERE id = 1
+    `, playerId).toArray()[0]
+    return row ? { roomId: row.room_id, inviteCode: row.invite_code, expiresAt: row.expires_at, member: row.member === 1 } : null
   }
 
   create(meta: StoredMeta): boolean {

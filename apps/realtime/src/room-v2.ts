@@ -38,15 +38,15 @@ export class RoomV2DurableObject extends DurableObject<RoomV2Env> {
     const bearer = request.headers.get('authorization')?.replace(/^Bearer /, '')
     const token = bearer ?? url.searchParams.get('token') ?? ''
     const session = await verifyRoomV2Session(this.env.SESSION_SECRET, token)
-    const meta = this.db.meta()
-    if (!session || !meta || session.roomId !== meta.roomId || session.inviteCode !== meta.inviteCode ||
-      !meta.players.some(player => player.id === session.playerId)) return null
+    if (!session) return null
+    const access = this.db.sessionAccess(session.playerId)
+    if (!access || session.roomId !== access.roomId || session.inviteCode !== access.inviteCode || !access.member) return null
     return session
   }
 
   private expired(): boolean {
-    const meta = this.db.meta()
-    return !meta || Date.parse(meta.expiresAt) <= Date.now()
+    const expiresAt = this.db.roomExpiresAt()
+    return !expiresAt || Date.parse(expiresAt) <= Date.now()
   }
 
   async fetch(request: Request): Promise<Response> {
@@ -136,10 +136,10 @@ export class RoomV2DurableObject extends DurableObject<RoomV2Env> {
 
   async webSocketMessage(socket: WebSocket, data: string | ArrayBuffer): Promise<void> {
     const session = socket.deserializeAttachment() as RoomV2Session | null
-    const meta = this.db.meta()
-    if (!session || !meta || session.roomId !== meta.roomId || session.exp <= Date.now() / 1000 ||
-      !meta.players.some(player => player.id === session.playerId)) { socket.close(1008, 'Session expired'); return }
-    if (this.expired()) { socket.close(1008, 'Room expired'); return }
+    if (!session || session.exp <= Date.now() / 1000) { socket.close(1008, 'Session expired'); return }
+    const access = this.db.sessionAccess(session.playerId)
+    if (!access || session.roomId !== access.roomId || session.inviteCode !== access.inviteCode || !access.member) { socket.close(1008, 'Session expired'); return }
+    if (Date.parse(access.expiresAt) <= Date.now()) { socket.close(1008, 'Room expired'); return }
     let input: unknown
     try { input = JSON.parse(typeof data === 'string' ? data : new TextDecoder().decode(data)) }
     catch { this.send(socket, { type: 'operation.error', requestId: '', code: 'INVALID_COMMAND', message: '无效 JSON' }); return }
