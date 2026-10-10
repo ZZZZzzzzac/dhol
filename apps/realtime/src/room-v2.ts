@@ -60,6 +60,13 @@ export class RoomV2DurableObject extends DurableObject<RoomV2Env> {
       }
       return json({ room: this.db.snapshot('', [], this.onlineIds())!.room, player: meta.players[0] })
     }
+    if (url.pathname === '/internal/v2/restore' && request.method === 'POST') {
+      const input = await request.json() as { meta: StoredMeta; state: Parameters<RoomV2Storage['restore']>[1] }
+      if (!this.db.restore(input.meta, input.state)) return json({ code: 'INVITE_COLLISION' }, 409)
+      try { await this.ctx.storage.setAlarm(Date.parse(input.meta.expiresAt)) }
+      catch { await this.ctx.storage.deleteAll(); this.db.resetAfterDelete(); return json({ code: 'PERSISTENCE_FAILED' }, 503) }
+      return json({ room: this.db.snapshot('', [], this.onlineIds())!.room, player: input.meta.players[0] })
+    }
     if (url.pathname === '/internal/v2/join' && request.method === 'POST') {
       const input = await request.json() as { playerId: string; nickname: string }
       const meta = this.db.meta()

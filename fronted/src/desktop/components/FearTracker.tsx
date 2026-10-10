@@ -1,0 +1,3 @@
+export default function FearTracker({ value, max, ready, onChange }: { value: number; max: number; ready: boolean; onChange: (delta: 1 | -1) => void }) {
+  return <section className="utility-card fear-tracker" aria-labelledby="fear-title"><div><p>房间资源</p><h2 id="fear-title">恐惧</h2></div><div className="fear-tracker__control"><button type="button" disabled={!ready || value === 0} onClick={() => onChange(-1)} aria-label="减少一点恐惧">−</button><strong>{value}<small> / {max}</small></strong><button type="button" disabled={!ready || value === max} onClick={() => onChange(1)} aria-label="增加一点恐惧">+</button></div></section>
+}

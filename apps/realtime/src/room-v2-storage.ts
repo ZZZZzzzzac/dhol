@@ -1,4 +1,4 @@
-import type { CharacterResources, CharacterSheetJson, CharacterSummary, DiceRollRecord, MutationAck, RoomV2Model } from '@dhgc/shared/desktop'
+import { summaryFromSheet, type CharacterResources, type CharacterSheetJson, type CharacterSummary, type DiceRollRecord, type MutationAck, type RoomV2Model } from '@dhgc/shared/desktop'
 
 export interface StoredMeta {
   roomId: string
@@ -48,6 +48,21 @@ export class RoomV2Storage {
     if (this.deleted) this.initialize()
     if (this.metaRow()) return false
     this.storage.sql.exec('INSERT INTO panel_v2_meta (id, room_json, seq, fear, xcard_json) VALUES (1, ?, 0, 0, NULL)', JSON.stringify(meta))
+    return true
+  }
+
+  restore(meta: StoredMeta, state: { fear: number; xCard: RoomV2Model['xCard']; dice: DiceRollRecord[]; characters: Array<{ sheet: CharacterSheetJson; resources: CharacterResources; position: number }> }): boolean {
+    if (!this.create(meta)) return false
+    this.transaction(() => {
+      state.characters.forEach((item, index) => {
+        const generation = index + 1
+        const summary = summaryFromSheet(item.sheet, item.resources, generation, item.position)
+        this.saveCharacter(summary.name, generation, item.position, item.sheet, summary, item.resources)
+      })
+      state.dice.slice(-50).forEach((roll, index) => this.saveDice(index + 1, roll))
+      const seq = Math.max(1, state.characters.length, state.dice.length)
+      this.storage.sql.exec('UPDATE panel_v2_meta SET seq = ?, fear = ?, xcard_json = ? WHERE id = 1', seq, state.fear, JSON.stringify(state.xCard))
+    })
     return true
   }
 

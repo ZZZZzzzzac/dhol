@@ -102,7 +102,7 @@
 
 ## 测试入口
 
-本地 Vite 开发服务器的 `/preview` 展示独立的新版桌面测试入口，根路径继续展示公告。2026-10-10 为用户线上自测制作的 Pages 构建设置了 `VITE_ENABLE_PREVIEW=true`，并在 Pages 根中间件对 `/preview` 使用 `PREVIEW_PASSWORD` 口令保护；口令只存在 Cloudflare Secret 和测试者手中，不提交仓库。公开根路径继续显示公告。该入口仍是阶段五功能测试版，阶段七继续完成四卡布局和只读完整卡。
+阶段七本地候选已由 `main.tsx` 直接装配新版桌面应用；历史 `/preview` 入口记录仅适用于阶段五、六部署。2026-10-10 为用户线上自测制作的 Pages 构建仍设置了 `VITE_ENABLE_PREVIEW=true`，并在 Pages 根中间件对 `/preview` 使用 `PREVIEW_PASSWORD` 口令保护；口令只存在 Cloudflare Secret 和测试者手中，不提交仓库。正式域名是否切换到阶段七候选属于后续发布步骤，本地入口变化不代表已经部署。
 
 2026-10-09 本地浏览器检查：`http://localhost:5173/` 显示“当前项目技术升级中”；`http://localhost:5173/preview` 显示房间创建与加入界面。该检查没有创建房间或访问生产用户数据。
 
@@ -127,3 +127,13 @@
 公开根路径 HTTP 200、标题仍为“技术升级中｜角色卡在线追踪”；匿名访问 `/preview` 返回 401，正确口令返回 200。测试页未在首页链接，HTML 含 `noindex,nofollow`。测试页直接连接 `dhol-realtime.gooole-dql.workers.dev`，避免浏览器在 Pages 代理 WebSocket 握手时混入 Basic 认证。页面认证仅保护 UI 入口；静态资产和 Worker API 并非私有网络资源，不应以地址不公开代替房间令牌权限。
 
 以合成角色运行 `ROOM_V2_BASE=https://screenol.pages.dev` 的 `room-v2-smoke.mjs`，两条线上 WebSocket、投递、并发标记、骰子、receipt 去重、历史裁剪及同名替换均通过（最终 seq 59、角色 1、骰子历史 50）。Playwright 在受保护入口创建线上合成房间，看到“已连接 · 已保存”；恐惧 +1 和 d20 成功，刷新后重新连接并恢复同一状态。浏览器最终一次加载没有控制台错误。线上合成房间按默认三天过期；未导入用户数据。
+
+## 阶段七：完整桌面应用本地验收（2026-10-10）
+
+本地 Vite `8.0.13` 连接本地 Wrangler `4.92.0`，使用五张合成 Daggerheart 角色卡。Playwright CLI 在 Chromium、1440×900、100% 缩放下检查：首页创建/加入/恢复入口、四卡两列两行布局、第五人本地分页、摘要字段顺序、四资源键盘按钮、独立骰子面板和完整卡弹窗；页面无横向溢出。720×900 下只显示桌面设备提示，不降级成手机房间或单列角色面板。
+
+完整卡按角色 generation 请求原 JSON，显示当前资源、自定义领域卡正文、冒险笔记及可展开的未知结构字段；组件没有输入框或 `contenteditable`，可执行图片协议会被拒绝。测试时发现 React StrictMode 探测挂载会触发原生 dialog 的清理关闭事件，已移除把程序性关闭误当用户关闭的监听，并在同一次会话复验弹窗正常。
+
+新版 JSON 备份经实际本地 API 执行“创建源房间 → 投递角色 → 导出 → `/api/v2/rooms/restore` 恢复”。恢复结果产生不同 `roomId` 和邀请码，房间名、角色数量、希望及已标记生命格保持一致；会话与 outbox 因新 `roomId` 隔离。该流程只使用合成数据。
+
+检查结果：前端 26/26、实时服务 63/63；前端生产构建和实时服务 TypeScript 检查通过，新 `fronted/src/desktop` 与本阶段测试的定向 ESLint 通过。全仓库前端 lint 仍有 29 条旧界面 error 和 4 条 warning 的既有基线；阶段七目录没有新增问题。
