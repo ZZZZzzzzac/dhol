@@ -21,4 +21,11 @@ describe('frontend entry routing', () => {
     expect(selectEntry('/room/ABC123', true, true)).toBe('legacy-retired')
     expect(selectEntry('/rooms/ABC123', true, true)).toBe('legacy-retired')
   })
+
+  it('retires only the exact historical admin route', () => {
+    expect(selectEntry('/admin', true, true)).toBe('legacy-retired')
+    expect(selectEntry('/admin/', true, true)).toBe('legacy-retired')
+    expect(selectEntry('/admin/settings', true, true)).toBe('maintenance')
+    expect(selectEntry('/administrator', true, true)).toBe('maintenance')
+  })
 })
