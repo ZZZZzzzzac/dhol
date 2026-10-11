@@ -197,3 +197,15 @@ workerd 集成套件与命令层 fake storage 套件分开执行、分开解释�
 入口边界保持不变：`/` 始终显示“当前项目技术升级中”；只有精确 `/preview` 或 `/preview/` 且处于开发模式或 `VITE_ENABLE_PREVIEW=true` 时才加载 Room V2 桌面。Pages 的 Basic Auth 中间件未放宽。旧 `/room/...` 或 `/rooms/...` 前端地址显示“旧版房间已下线，请创建新房间”，不转移旧会话。一次性浏览器清理只删除明确列出的旧 key/前缀，以持久版本 marker 保证幂等；不调用 `localStorage.clear()`，并保留 `dhol:desktop:v2:*`、preview 状态、角色构建器存档和其他同源数据。
 
 发布候选的最终人工后续是：先在线上受保护的 `/preview` 完成验证；验证通过后，**只移除维护入口 gate**，使 Room V2 应用可从 `/` 访问。不应在该后续中恢复任何旧房间运行时。
+
+## 阶段十 10A：发布候选复验（2026-10-11）
+
+在候选提交 `7d7d8c2` 上独立执行发布前检查，未部署 Worker/Pages，也未修改 Cloudflare。共享测试 24/24、实时服务测试 37/37、前端测试 22/22、workerd 集成测试 2/2，共 85/85；桌面边界检查遍历 41 个传递模块且 3/3 自测通过。`npm run build`（前端 43 个模块及 Worker TypeScript）、`npm run fronted:lint` 与 `git diff --check` 均通过。workerd 使用的本地运行时只支持至 `2026-03-10`，因此对配置的 `2026-04-28` 给出回退警告；测试仍通过，此项不等同于生产运行时验证。
+
+`npx wrangler deploy --dry-run` 使用 Wrangler 4.92.0 成功生成 60.24 KiB（gzip 14.44 KiB）包，输出只列出 `ROOMS_V2 (RoomV2DurableObject)` Durable Object 绑定；配置保留 v1、v2 历史并追加 v3 `deleted_classes=["RoomDurableObject"]`。该命令为 dry-run，没有上传或应用删除迁移。精确退役搜索共 7 个命中：生产源码的 2 个命中均是一次性清理器中的 `gm-panel:` / `mobile-panel:` 前缀，另外 5 个是该清理器的删除、幂等与保留行为测试；没有 `gmPanelHtml`、`decodeMobilePanelCharacterCode`、`env.ROOMS` 或 `class RoomDurableObject` 命中。生产构建资产也没有这些旧实现符号，只有同一清理器的两个前缀；边界检查和候选源码清单确认旧前后端业务模块未进入候选构建。
+
+Playwright CLI 连接启用 `VITE_ENABLE_PREVIEW=true` 的本地 Vite 8.0.13，并以快照检查 7 条路径：`/` 显示“当前项目技术升级中”；`/preview` 与 `/preview/` 仅显示 Room V2 的创建、加入及 JSON 恢复入口；`/preview/admin` 与 `/admin/settings` 显示维护页；`/admin` 与 `/room/ABC123` 显示“旧版房间已下线，请创建新房间”。各次页面加载的控制台均为 0 error、0 warning。生产 Pages 中间件仍只对精确 `/preview` / `/preview/` 执行 Basic Auth；本地 Vite 检查不替代正式域名认证验证。
+
+一次性 localStorage 测试覆盖持久 marker 下的刷新/重复调用幂等性，并证明保留 Room V2 session/outbox、自定义骰子预设、车卡器存档、preview 状态和无关同源键；测试实现禁止调用 `localStorage.clear()`。阶段十矩阵中的协议、持久化、故障注入、只读卡、X 卡、JSON 全覆盖及双客户端可靠性由前序阶段测试和记录支持，本轮完整回归证明最终候选未破坏这些自动化契约；本轮路由冒烟没有创建房间，不能替代线上双客户端闭环。
+
+以下项目仍是发布后或正式环境专属，**未通过且未声称通过**：生产 `RoomDurableObject` 删除及 namespace/旧 alarm/旧连接退役证据；正式域名两客户端创建、JSON 投递、四资源标记、掷骰一致、刷新/重连与导出恢复；删除前后 Room V2 状态隔离对照；约 30 分钟空闲观察；至少两次完整跑团；连续七天用量趋势。车卡器仓库此前成功的 45 项定向测试与 `pnpm build:local` 未在本轮重跑；其现有 `lib/embedded-styles.ts` 生成变更未被本轮修改或提交。
