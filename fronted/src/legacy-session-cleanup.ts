@@ -1,7 +1,6 @@
 export const LEGACY_CLEANUP_MARKER = 'dhol:maintenance:legacy-storage-cleanup:v1'
 
 const LEGACY_KEYS = new Set([
-  'dhgc:dice-presets:v1',
   'dhgc:room',
   'dhgc:token',
   'dhgc:queue',

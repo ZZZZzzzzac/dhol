@@ -30,7 +30,7 @@ describe('legacy browser storage cleanup', () => {
     })) storage.setItem(key, value)
 
     expect(retireLegacyBrowserStorage(storage)).toBe(true)
-    expect(storage.getItem('dhgc:dice-presets:v1')).toBeNull()
+    expect(storage.getItem('dhgc:dice-presets:v1')).toBe('legacy-dice')
     expect(storage.getItem('gm-panel:battle-panel:old-room')).toBeNull()
     expect(storage.getItem('dhol:legacy:room')).toBeNull()
     expect(storage.getItem('dhol:desktop:v2:session')).toBe('v2-session')
