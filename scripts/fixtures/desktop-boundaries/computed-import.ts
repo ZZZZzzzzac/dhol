@@ -1,5 +1,5 @@
-const target = '../../../packages/shared/src/types'
+const target = '../../../fronted/src/desktop/DesktopApp'
 void import(target)
 
-const requiredTarget = '../../../packages/shared/src/protocol'
+const requiredTarget = '../../../packages/shared/src/desktop'
 require(requiredTarget)

@@ -14,23 +14,20 @@ const entries = [
   path.join(root, 'packages/shared/src/desktop.ts'),
 ]
 const forbidden = [
-  ['旧 App', 'fronted/src/App.tsx'],
   ['旧页面', 'fronted/src/pages/'],
   ['旧 store', 'fronted/src/store/'],
   ['旧实时客户端', 'fronted/src/lib/realtime.ts'],
   ['旧房间类型', 'fronted/src/types/index.ts'],
   ['HTML 解析', 'fronted/src/utils/gmPanelHtml.ts'],
   ['移动角色码', 'fronted/src/components/mobile-panel/'],
-  ['移动角色码', 'packages/shared/src/mobile-panel-code.ts'],
-  ['旧 Durable Object', 'apps/realtime/src/legacy-room.ts'],
-  ['旧共享房间类型', 'packages/shared/src/types.ts'],
-  ['旧共享协议', 'packages/shared/src/protocol.ts'],
-  ['旧 HTML 工具', 'packages/shared/src/utils.ts'],
 ]
 const obsoleteRoots = [
-  'fronted/src/App.tsx', 'fronted/src/App.css', 'fronted/src/pages', 'fronted/src/store',
+  'fronted/src/App.css', 'fronted/src/pages', 'fronted/src/store',
   'fronted/src/lib', 'fronted/src/components', 'fronted/src/types', 'fronted/src/utils',
-  'fronted/src/preview', 'fronted/src/maintenance.css',
+  'fronted/src/preview',
+  'apps/realtime/src/legacy-room.ts', 'apps/realtime/src/socket-session.ts',
+  'packages/shared/src/types.ts', 'packages/shared/src/protocol.ts', 'packages/shared/src/validators.ts',
+  'packages/shared/src/mobile-panel-code.ts', 'packages/shared/src/drawing.ts', 'packages/shared/src/utils.ts',
 ]
 
 function normalized(file) { return path.relative(root, file).replaceAll('\\', '/') }
@@ -120,10 +117,9 @@ const activeEntries = selfTest ? [path.join(root, 'scripts/fixtures/desktop-boun
 const { parents, syntaxFailures } = dependencyGraph(activeEntries)
 const failures = [...boundaryFailures(parents), ...syntaxFailures]
 if (selfTest) {
-  const required = ['apps/realtime/src/legacy-room.ts', 'packages/shared/src/types.ts', 'packages/shared/src/protocol.ts', 'packages/shared/src/utils.ts']
   const output = failures.join('\n')
-  if (required.every(fragment => output.includes(fragment)) && output.includes('非字面量动态依赖')) console.log(`边界负向自检通过：\n${output}`)
-  else { console.error(`边界负向自检未捕获全部禁区：\n${output}`); process.exitCode = 1 }
+  if ((output.match(/非字面量动态依赖/g)?.length ?? 0) === 2) console.log(`边界负向自检通过：\n${output}`)
+  else { console.error(`边界负向自检未捕获动态依赖：\n${output}`); process.exitCode = 1 }
 } else for (const relative of obsoleteRoots) {
   const target = path.join(root, relative)
   if (!fs.existsSync(target)) continue

@@ -187,3 +187,13 @@ WebSocket 消息外层用一条 SQL `json_extract` / `json_each` 查询取得 ro
 本轮红灯首先精确复现三类问题：空值/非法日期未被当作过期，六段可控时钟期望只得到旧的三段指标，边界自测没有发现计算型依赖且无法列出六个生产入口。修正后，WebSocket 入口在反序列化、授权与解析之前记录收到时间；命令串行队列在入队、出队、hash 完成、事务开始、事务提交和广播完成各留一个边界，`storageMs` 不再包含 hash、掷骰或事件构造。`isExpired` 统一把缺失、null、非法日期和已到期时间判为过期，SQLite session access 类型显式反映 JSON 字段可空。
 
 workerd 集成套件与命令层 fake storage 套件分开执行、分开解释；前者提供真实 SQLite、两条 WebSocket 和事务回滚证据，后者保留快速、确定性的时钟、排队和保存后广播顺序断言。其后的香港独立环境部署与浏览器样本如本节上方记录；可靠性通过，但不据此声称公网 P50/P95 目标达标。
+
+## 阶段九：发布候选的旧房间退役（2026-10-11）
+
+本工作树已将运行时房间链路收敛到 `/api/v2/rooms` 和 `ROOMS_V2`。旧 `/api/rooms` 本身、任意子路径及 WebSocket 升级尝试都在 Worker 入口直接返回无状态 HTTP 410 JSON，代码为 `LEGACY_ROOMS_RETIRED`，不查询或创建 Durable Object。其他未知 API 仍返回 404。旧后端实现、socket/session 模块、旧共享房间模型与协议、HTML/重放/绘图/倒计时/移动角色码表面及其专用测试已从候选源码删除；纯骰子规则与 Room V2 桌面公开 API 保留。
+
+`wrangler.toml` 保留原有 `v1` 和 `v2-json-desktop` 迁移，只追加 `v3-retire-legacy-rooms`，其 `deleted_classes=["RoomDurableObject"]`。这意味着将来真正部署该 Worker 迁移时，Cloudflare 会删除旧 Durable Object 类及其存储；本次只制作候选配置，**没有执行部署，也没有在云端执行删除**。
+
+入口边界保持不变：`/` 始终显示“当前项目技术升级中”；只有精确 `/preview` 或 `/preview/` 且处于开发模式或 `VITE_ENABLE_PREVIEW=true` 时才加载 Room V2 桌面。Pages 的 Basic Auth 中间件未放宽。旧 `/room/...` 或 `/rooms/...` 前端地址显示“旧版房间已下线，请创建新房间”，不转移旧会话。一次性浏览器清理只删除明确列出的旧 key/前缀，以持久版本 marker 保证幂等；不调用 `localStorage.clear()`，并保留 `dhol:desktop:v2:*`、preview 状态、角色构建器存档和其他同源数据。
+
+发布候选的最终人工后续是：先在线上受保护的 `/preview` 完成验证；验证通过后，**只移除维护入口 gate**，使 Room V2 应用可从 `/` 访问。不应在该后续中恢复任何旧房间运行时。

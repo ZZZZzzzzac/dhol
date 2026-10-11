@@ -1,0 +1,19 @@
+:root { font-family:Inter,'Noto Sans SC',system-ui,sans-serif; color:#f8f4ff; background:#0d081d; }
+* { box-sizing:border-box; }
+html,body,#root { min-height:100%; margin:0; }
+.maintenance-page { position:relative; min-height:100vh; display:grid; place-items:center; overflow:hidden; padding:32px 20px; background:radial-gradient(circle at 50% 38%,rgba(73,51,145,.22),transparent 34%),linear-gradient(145deg,#0d081d 0%,#17102f 48%,#0b0718 100%); isolation:isolate; }
+.maintenance-page::before { content:''; position:absolute; inset:0; z-index:-1; opacity:.16; background-image:linear-gradient(rgba(255,255,255,.04) 1px,transparent 1px),linear-gradient(90deg,rgba(255,255,255,.04) 1px,transparent 1px); background-size:48px 48px; mask-image:radial-gradient(circle at center,#000,transparent 72%); }
+.maintenance-glow { position:absolute; z-index:-1; width:min(48vw,560px); aspect-ratio:1; border-radius:50%; filter:blur(90px); opacity:.18; }
+.maintenance-glow--left { left:-22%; bottom:-34%; background:#62dacd; }
+.maintenance-glow--right { top:-38%; right:-20%; background:#8e74ed; }
+.maintenance-card { width:min(100%,700px); padding:clamp(42px,8vw,76px) clamp(26px,8vw,72px); border:1px solid rgba(183,164,242,.24); background:rgba(20,13,45,.72); box-shadow:0 32px 90px rgba(2,1,9,.52),inset 0 1px 0 rgba(255,255,255,.06); text-align:center; backdrop-filter:blur(18px); }
+.maintenance-mark { width:66px; height:66px; display:grid; place-items:center; margin:0 auto 28px; border:1px solid rgba(139,224,213,.48); color:#a8eee6; background:rgba(139,224,213,.08); transform:rotate(45deg); }
+.maintenance-mark span { font-family:Cinzel,serif; font-size:30px; font-weight:700; transform:rotate(-45deg); }
+.maintenance-eyebrow { margin:0 0 18px; color:#8be0d5; font:700 11px Cinzel,serif; letter-spacing:.32em; }
+.maintenance-card h1 { margin:0; font:700 clamp(30px,6vw,50px)/1.22 Cinzel,'Noto Sans SC',serif; letter-spacing:.04em; }
+.maintenance-divider { display:grid; grid-template-columns:minmax(24px,86px) 7px minmax(24px,86px); align-items:center; justify-content:center; gap:13px; margin:30px auto; }
+.maintenance-divider span { height:1px; background:linear-gradient(90deg,transparent,rgba(139,224,213,.68)); }
+.maintenance-divider span:last-child { transform:rotate(180deg); }
+.maintenance-divider i { width:7px; height:7px; border:1px solid #8be0d5; transform:rotate(45deg); }
+.maintenance-message { margin:0; color:rgba(248,244,255,.88); font-size:clamp(18px,3vw,23px); line-height:1.65; }
+.maintenance-footnote { margin:18px 0 0; color:rgba(226,218,242,.58); font-size:13px; line-height:1.7; }
