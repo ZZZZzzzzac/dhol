@@ -16,8 +16,14 @@ type CharacterHeader = Pick<CharacterRow, 'name' | 'generation' | 'position'>
 type ResourceRow = { resources_json: string }
 type DiceRow = { record_json: string }
 type ReceiptRow = { payload_hash: string; seq: number; result_json: string }
-type SessionAccessRow = { room_id: string; invite_code: string; expires_at: string; member: number }
-export interface RoomV2SessionAccess { roomId: string; inviteCode: string; expiresAt: string; member: boolean }
+type SessionAccessRow = { room_id: string | null; invite_code: string | null; expires_at: string | null; member: number | null }
+export interface RoomV2SessionAccess { roomId: string | null; inviteCode: string | null; expiresAt: string | null; member: boolean }
+
+export function isExpired(expiresAt: string | null | undefined, now = Date.now()): boolean {
+  if (!expiresAt) return true
+  const expiry = Date.parse(expiresAt)
+  return !Number.isFinite(expiry) || expiry <= now
+}
 
 export class RoomV2Storage {
   private deleted = false

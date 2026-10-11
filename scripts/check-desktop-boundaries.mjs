@@ -5,8 +5,11 @@ import ts from 'typescript'
 
 const root = process.cwd()
 const entries = [
+  path.join(root, 'fronted/src/main.tsx'),
   path.join(root, 'fronted/src/desktop/DesktopApp.tsx'),
   path.join(root, 'apps/realtime/src/room-v2.ts'),
+  path.join(root, 'apps/realtime/src/room-v2-http.ts'),
+  path.join(root, 'apps/realtime/src/character-ingest.ts'),
   path.join(root, 'packages/shared/src/desktop.ts'),
 ]
 const forbidden = [
@@ -48,13 +51,20 @@ function resolve(specifier, containingFile) {
   const resolved = resolution.resolvedFileName.replace(/\.d\.ts$/, '.ts')
   return fs.existsSync(resolved) ? path.resolve(resolved) : null
 }
-function dependencies(file) {
+function dependencies(file, syntaxFailures) {
   const source = ts.createSourceFile(file, fs.readFileSync(file, 'utf8'), ts.ScriptTarget.Latest, true)
   const specs = []
   function visit(node) {
     if ((ts.isImportDeclaration(node) || ts.isExportDeclaration(node)) && node.moduleSpecifier && ts.isStringLiteral(node.moduleSpecifier)) specs.push(node.moduleSpecifier.text)
     if (ts.isImportEqualsDeclaration(node) && ts.isExternalModuleReference(node.moduleReference) && ts.isStringLiteral(node.moduleReference.expression)) specs.push(node.moduleReference.expression.text)
-    if (ts.isCallExpression(node) && node.expression.kind === ts.SyntaxKind.ImportKeyword && node.arguments.length === 1 && ts.isStringLiteral(node.arguments[0])) specs.push(node.arguments[0].text)
+    if (ts.isCallExpression(node) && node.expression.kind === ts.SyntaxKind.ImportKeyword) {
+      if (node.arguments.length === 1 && ts.isStringLiteralLike(node.arguments[0])) specs.push(node.arguments[0].text)
+      else syntaxFailures.push(`非字面量动态依赖：${normalized(file)}:${source.getLineAndCharacterOfPosition(node.getStart(source)).line + 1}`)
+    }
+    if (ts.isCallExpression(node) && ts.isIdentifier(node.expression) && node.expression.text === 'require') {
+      if (node.arguments.length === 1 && ts.isStringLiteralLike(node.arguments[0])) specs.push(node.arguments[0].text)
+      else syntaxFailures.push(`非字面量动态依赖：${normalized(file)}:${source.getLineAndCharacterOfPosition(node.getStart(source)).line + 1}`)
+    }
     ts.forEachChild(node, visit)
   }
   visit(source)
@@ -73,18 +83,19 @@ function forbiddenMatch(file) {
 }
 function dependencyGraph(startEntries) {
   const parents = new Map()
+  const syntaxFailures = []
   const queue = [...startEntries]
   for (const entry of startEntries) parents.set(entry, null)
   while (queue.length) {
     const file = queue.shift()
-    for (const dependency of dependencies(file)) {
+    for (const dependency of dependencies(file, syntaxFailures)) {
       if (!parents.has(dependency)) {
         parents.set(dependency, file)
         if (!forbiddenMatch(dependency)) queue.push(dependency)
       }
     }
   }
-  return parents
+  return { parents, syntaxFailures }
 }
 
 function boundaryFailures(parents) {
@@ -100,13 +111,17 @@ function boundaryFailures(parents) {
 }
 
 const selfTest = process.argv.includes('--self-test')
+if (process.argv.includes('--show-entries')) {
+  console.log(entries.map(normalized).join('\n'))
+  process.exit(0)
+}
 const activeEntries = selfTest ? [path.join(root, 'scripts/fixtures/desktop-boundaries/entry.ts')] : entries
-const parents = dependencyGraph(activeEntries)
-const failures = boundaryFailures(parents)
+const { parents, syntaxFailures } = dependencyGraph(activeEntries)
+const failures = [...boundaryFailures(parents), ...syntaxFailures]
 if (selfTest) {
   const required = ['apps/realtime/src/legacy-room.ts', 'packages/shared/src/types.ts', 'packages/shared/src/protocol.ts', 'packages/shared/src/utils.ts']
   const output = failures.join('\n')
-  if (required.every(fragment => output.includes(fragment))) console.log(`边界负向自检通过：\n${output}`)
+  if (required.every(fragment => output.includes(fragment)) && output.includes('非字面量动态依赖')) console.log(`边界负向自检通过：\n${output}`)
   else { console.error(`边界负向自检未捕获全部禁区：\n${output}`); process.exitCode = 1 }
 } else for (const relative of obsoleteRoots) {
   const target = path.join(root, relative)

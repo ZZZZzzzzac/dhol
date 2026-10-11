@@ -13,6 +13,8 @@
     "realtime:dev": "npm --workspace apps/realtime run dev",
     "realtime:deploy": "npm --workspace apps/realtime run deploy",
     "realtime:typecheck": "npm --workspace apps/realtime run typecheck",
-    "build": "npm run fronted:build && npm run realtime:typecheck"
+    "build": "npm run fronted:build && npm run realtime:typecheck",
+    "check:desktop-boundaries": "node scripts/check-desktop-boundaries.mjs && node --test scripts/__tests__/check-desktop-boundaries.test.mjs",
+    "check": "npm run check:desktop-boundaries && npm run build"
   }
 }

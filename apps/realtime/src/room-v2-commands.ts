@@ -1,5 +1,5 @@
 import { characterNameKey, resourcesFromSheet, rollDicePool, summaryFromSheet, type CharacterSheetJson, type DiceRollRecord, type MutationAck, type MutationCommand, type MutationError, type RoomEvent } from '@dhgc/shared/desktop'
-import { RoomV2Storage } from './room-v2-storage'
+import { isExpired, RoomV2Storage } from './room-v2-storage'
 import { summarizeRollServerMetrics, type RollCommandMetric } from './room-v2-metrics'
 
 export type { RollCommandMetric } from './room-v2-metrics'
@@ -15,6 +15,8 @@ export interface RoomV2CommandOptions {
   hash?: (value: unknown) => Promise<string>
   onRollMetric?: (metric: RollCommandMetric) => void
 }
+export interface CommandTimingContext { receivedAtMs: number }
+interface CommitTimingHooks { transactionStarted(): void; transactionCommitted(): void; broadcastCompleted(): void }
 
 function canonical(value: unknown): unknown {
   if (Array.isArray(value)) return value.map(canonical)
@@ -50,17 +52,27 @@ export class RoomV2Commands {
     return result
   }
 
-  async mutate(actor: string, nickname: string, command: MutationCommand): Promise<CommitResult> {
-    const receivedAtMs = this.now()
+  async mutate(actor: string, nickname: string, command: MutationCommand, timing?: CommandTimingContext): Promise<CommitResult> {
+    const receivedAtMs = timing?.receivedAtMs ?? this.now()
+    const enqueuedAtMs = this.now()
     return this.enqueue(async () => {
-      const queuedAtMs = this.now()
+      const dequeuedAtMs = this.now()
       const hash = await this.hash(command)
-      let storedAtMs = queuedAtMs
-      let broadcastAtMs = queuedAtMs
-      const result = this.commit(actor, command.requestId, hash, this.applyCommand(actor, nickname, command), () => { storedAtMs = this.now() }, () => { broadcastAtMs = this.now() })
+      const hashedAtMs = this.now()
+      let transactionStartedAtMs = hashedAtMs
+      let transactionCommittedAtMs = hashedAtMs
+      let broadcastAtMs = hashedAtMs
+      const result = this.commit(actor, command.requestId, hash, this.applyCommand(actor, nickname, command), {
+        transactionStarted: () => { transactionStartedAtMs = this.now() },
+        transactionCommitted: () => { transactionCommittedAtMs = this.now() },
+        broadcastCompleted: () => { broadcastAtMs = this.now() },
+      })
       if (command.type === 'dice.roll' && !result.duplicate && result.event?.type === 'dice.rolled') {
         const eventBytes = new TextEncoder().encode(JSON.stringify(result.event)).byteLength
-        this.options.onRollMetric?.(summarizeRollServerMetrics({ requestId: command.requestId, receivedAtMs, queuedAtMs, storedAtMs, broadcastAtMs }, eventBytes))
+        this.options.onRollMetric?.(summarizeRollServerMetrics({
+          requestId: command.requestId, receivedAtMs, enqueuedAtMs, dequeuedAtMs, hashedAtMs,
+          transactionStartedAtMs, transactionCommittedAtMs, broadcastAtMs,
+        }, eventBytes))
       }
       return result
     })
@@ -81,7 +93,7 @@ export class RoomV2Commands {
     })
   }
 
-  private commit(actor: string, requestId: string, hash: string, build: (seq: number) => { event: RoomEvent | null; write: () => void; action?: 'created' | 'updated' }, onStored?: () => void, onBroadcast?: () => void): CommitResult {
+  private commit(actor: string, requestId: string, hash: string, build: (seq: number) => { event: RoomEvent | null; write: () => void; action?: 'created' | 'updated' }, timing?: CommitTimingHooks): CommitResult {
     const prior = this.db.receipt(actor, requestId)
     if (prior) {
       if (prior.payload_hash !== hash) throw new CommandFailure('REQUEST_ID_REUSED', '请求 ID 已用于另一操作')
@@ -90,23 +102,24 @@ export class RoomV2Commands {
     }
     const meta = this.db.metaRow()
     const expiresAt = this.db.roomExpiresAt()
-    if (!meta || !expiresAt || Date.parse(expiresAt) <= Date.now()) throw new CommandFailure('ROOM_EXPIRED', '房间已过期')
+    if (!meta || isExpired(expiresAt)) throw new CommandFailure('ROOM_EXPIRED', '房间已过期')
     const seq = meta.seq + 1
     const change = build(seq)
     const ack: MutationAck = { type: 'operation.ack', requestId, seq: change.event ? seq : meta.seq }
     const result: CommitResult = { ack, event: change.event, duplicate: false, action: change.action }
     try {
+      timing?.transactionStarted()
       this.db.transaction(() => {
         change.write()
         if (change.event) this.db.advance(seq, change.event.type === 'room.fearChanged' ? change.event.fear.value : undefined, change.event.type === 'xcard.changed' ? change.event.xCard : undefined)
         this.db.saveReceipt(actor, requestId, hash, ack.seq, result)
       })
+      timing?.transactionCommitted()
     } catch {
       throw new CommandFailure('PERSISTENCE_FAILED', '保存失败，请重试')
     }
-    onStored?.()
     if (change.event) this.publish(change.event)
-    onBroadcast?.()
+    timing?.broadcastCompleted()
     return result
   }
 

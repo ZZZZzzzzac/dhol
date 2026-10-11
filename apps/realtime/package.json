@@ -7,12 +7,14 @@
     "dev": "wrangler dev",
     "deploy": "wrangler deploy",
     "test": "vitest run",
+    "test:workerd": "vitest run --config vitest.workers.config.ts",
     "typecheck": "tsc --noEmit"
   },
   "dependencies": {
     "@dhgc/shared": "file:../../packages/shared"
   },
   "devDependencies": {
+    "@cloudflare/vitest-pool-workers": "0.12.21",
     "@cloudflare/workers-types": "^4.20260426.1",
     "typescript": "^6.0.2",
     "vitest": "^3.0.0",

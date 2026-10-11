@@ -149,13 +149,15 @@
 | 休眠后第一掷 | 待测 | 待测 | 待测 | 单列，不混入热路径分布 |
 | 网络基线 / 应用增加耗时 | 待测 | 待测 | 待测 | 网络往返超过目标时必须分开报告 |
 
-本地契约压力测试同时发起 50 次普通掷骰与 10 次约 200 KiB 合成角色替换，并另跑 20 组双客户端事件副本核对；全部正式 roll ID、结果和持久化记录一致。普通 `1d20` 事件断言不超过 2 KiB；最大允许骰池按实际 JSON 字节记录并保留每个结果，不截断来迎合体积目标。服务端现在为每次非重复正式掷骰记录进入、出队、事务成功、广播完成和事件字节数；日志不含角色资料、邀请码或会话令牌。排队测量覆盖角色替换造成的串行等待，没有改变已确认的“事务成功后广播”顺序。
+命令层 fake storage 压力测试同时发起 50 次普通掷骰与 10 次约 200 KiB 合成角色替换，并另将 20 个正式事件分别按结构化克隆和 JSON 往返形成两份消费者视图核对；这两份视图不是两个真实客户端。全部正式 roll ID、结果和 fake 持久化记录一致。普通 `1d20` 事件断言不超过 2 KiB；最大允许骰池按实际 JSON 字节记录并保留每个结果，不截断来迎合体积目标。可控时钟精确断言服务端 `preQueueMs`（入口授权/解析）、`queueMs`、`hashMs`、`computeMs`、`storageMs`（仅事务）、`broadcastMs` 和 `serverTotalMs`；日志不含角色资料、邀请码或会话令牌。排队测量覆盖角色替换造成的串行等待，没有改变已确认的“事务成功后广播”顺序。
+
+独立 workerd 集成套件使用 `@cloudflare/vitest-pool-workers@0.12.21` 在真实 Workers 运行时中建立 SQLite-backed `ROOMS_V2`，通过两条 WebSocket 验证同一正式 roll ID/结果，并直接查询 seq、receipt 与骰子记录。另在 `runInDurableObject` 中让真实 SQLite 事务写入中途抛错，确认 seq 与骰子行一并回滚。该套件是两条真实 workerd WebSocket，但不是浏览器或香港公网延迟测试。仓库仍使用 Vitest 3.2.6，因此选择官方兼容线的最后一个 0.12.x 版本；迁移到要求 Vitest 4 的新版插件留给独立工具链升级，未在本阶段扩大范围。
 
 WebSocket 消息外层用一条 SQL `json_extract` / `json_each` 查询取得 room ID、邀请码、到期时间和指定 player ID 的成员资格，在 JavaScript 中不读取或 `JSON.parse` 完整 `room_json`；命令层再读取 receipt、单行 seq/fear/x-card 和到期时间。热路径不读取角色 source JSON、不生成快照、不恢复 HTML，也不编译界面。会话仍同时验证签名 token 的有效期、room ID、邀请码、成员资格和房间到期时间，没有以优化为由弱化授权。掷骰仍唯一由服务端 `crypto.getRandomValues` 和共享纯函数生成；前端待确认状态只显示“掷骰中…”。正式事件直接更新本机 confirmed store 并清除 outbox，不重新获取全房间；该过程从两次 UI 通知收敛为一次。8 秒 confirmation timer 仅在事件/ACK 缺失时请求同步，不延后正式结果或历史写入，也不是五秒动画窗口。
 
 阶段四、五既有 ACK 丢失、持久化失败、断线重试与快照补洞测试继续复用，没有新增同义故障注入。阶段八新增的失败证据为：后端新测试最初 3/3 因热路径仍调用完整 `meta()` 失败；同步测试最初发现单个正式骰子事件产生 2 次 UI 通知而失败。改为最小到期字段读取和合并通知后均通过。
 
-`scripts/check-desktop-boundaries.mjs` 从 `DesktopApp.tsx`、`RoomV2DurableObject` 所在模块和 `@dhgc/shared/desktop` 三个入口出发，调用 TypeScript 模块解析器处理相对路径、`@` 别名、package exports、barrel 和动态 import 后遍历传递依赖。到达旧 App/pages/store、旧房间类型、旧实时客户端、HTML 解析、移动角色码、`legacy-room.ts` 或旧共享 `types.ts` / `protocol.ts` / `utils.ts` 即失败；另检查候选前端不存在旧实现文件。本次正常入口遍历 33 个模块通过。负向夹具通过 barrel 和动态 import 实际连接四个旧后端/共享模块，`node --test scripts/__tests__/check-desktop-boundaries.test.mjs` 确认四条路径都会被报告。Worker `index.ts` 暂留的 `RoomDurableObject` 导出和旧 fallback 只服务现有部署生命周期；新版路由与 `RoomV2DurableObject` 的入口图均未到达旧类。最终移除旧导出和独立环境部署属于需要明确测试目标的后续清理，不在本阶段越权执行。
+`scripts/check-desktop-boundaries.mjs` 从 `main.tsx`、`DesktopApp.tsx`、`RoomV2DurableObject` 所在模块、`room-v2-http.ts`、`character-ingest.ts` 和 `@dhgc/shared/desktop` 六个入口出发，调用 TypeScript 模块解析器处理相对路径、`@` 别名、package exports、barrel、字面量动态 import 与 require 后遍历传递依赖。受保护图中的计算型 dynamic import 或 require 会直接失败。到达旧 App/pages/store、旧房间类型、旧实时客户端、HTML 解析、移动角色码、`legacy-room.ts` 或旧共享 `types.ts` / `protocol.ts` / `utils.ts` 也会失败；另检查候选前端不存在旧实现文件。本次正常入口遍历 36 个模块通过。负向夹具通过 barrel、字面量动态 import 连接四个旧后端/共享模块，并以计算型 import 与 require 验证拒绝逻辑；根 `check:desktop-boundaries` 同时运行正向图和负向自测。Worker `index.ts` 暂留的 `RoomDurableObject` 导出和旧 fallback 只服务现有部署生命周期；上述新版入口图均未到达旧类。最终移除旧导出和独立环境部署属于需要明确测试目标的后续清理，不在本阶段越权执行。
 
 候选前端已删除旧 `App`、pages、store、lib、preview、components、types、utils、旧测试、旧静态资源和旧全局样式。依赖只保留 React、React DOM、Zustand 及构建/测试工具；移除 Radix、React Flow、Tailwind、Framer Motion、Lucide、nanoid、clsx、CVA 和平台专用可选包。生产 CSS 从删除前的 83.66 kB 降为 12.96 kB，候选仍可独立构建。
 
@@ -166,10 +168,16 @@ WebSocket 消息外层用一条 SQL `json_extract` / `json_each` 查询取得 ro
 - 通用 UI 运行时：React、React DOM；状态容器仅使用 `zustand/vanilla`，传递依赖图未到达旧 store。
 - 加密工具：运行时原生 Web Crypto（随机数、UUID、SHA-256、会话签名）；不引入旧客户端或第三方加密包。
 
-验证结果：阶段八后端定向 9/9、前端定向 8/8；传递依赖检查及负向自测通过；前端生产构建与 Worker TypeScript 检查通过。由于没有公网数据，没有打开浏览器 profiler，也没有声称满足 P50 ≤ 300 ms、P95 ≤ 800 ms 或冷启动 P95 ≤ 1500 ms。
+验证结果：阶段八后端定向 12/12、workerd 集成 2/2、前端定向 8/8；完整套件为实时服务 75/75、前端 16/16、共享 38/38。传递依赖正向检查及 3 项负向/入口/脚本自测通过；前端 lint、生产构建与 Worker TypeScript 检查通过。由于没有公网数据，没有打开浏览器 profiler，也没有声称满足 P50 ≤ 300 ms、P95 ≤ 800 ms 或冷启动 P95 ≤ 1500 ms。
 
 ### 阶段八规格复审修正
 
 补充的 TDD 红灯记录：WebSocket 热路径测试最初因调用 `db.meta()` 抛出“complete meta must stay cold”；到达顺序测试因可控 hash 未进入串行队列而得到空的 hash 顺序；边界负向自测最初错误返回正常入口通过，未报告四个旧模块。修正后，hash 在命令调用时立即占据队列位置，再于事务前完成；并发大、小 payload 不会因 SHA-256 完成先后交换提交顺序。可控时钟确认后续命令 `queueMs > 0`，记录器确认每个 seq 均严格执行 `save dice → advance seq → save receipt → publish`，最终骰子、receipt 和 seq 一致。
 
 香港独立环境与真实双浏览器延迟仍保持“待测”；本次复审修正没有部署或修改任何外部状态，也没有新增延迟达标声明。
+
+### 阶段八代码质量复审修正
+
+本轮红灯首先精确复现三类问题：空值/非法日期未被当作过期，六段可控时钟期望只得到旧的三段指标，边界自测没有发现计算型依赖且无法列出六个生产入口。修正后，WebSocket 入口在反序列化、授权与解析之前记录收到时间；命令串行队列在入队、出队、hash 完成、事务开始、事务提交和广播完成各留一个边界，`storageMs` 不再包含 hash、掷骰或事件构造。`isExpired` 统一把缺失、null、非法日期和已到期时间判为过期，SQLite session access 类型显式反映 JSON 字段可空。
+
+workerd 集成套件与命令层 fake storage 套件分开执行、分开解释；前者提供真实 SQLite、两条 WebSocket 和事务回滚证据，后者保留快速、确定性的时钟、排队和保存后广播顺序断言。香港独立环境部署、50 次普通骰、20 组真实双浏览器操作和休眠首掷仍未执行，不据本地测试声称任何公网 P50/P95 目标达标。

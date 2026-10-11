@@ -66,6 +66,8 @@ describe('Room V2 dice hot path', () => {
     [{ roomId: 'room', inviteCode: 'ABC123', expiresAt: '2030-01-01T00:00:00.000Z', member: false }, 'Session expired'],
     [{ roomId: 'another-room', inviteCode: 'ABC123', expiresAt: '2030-01-01T00:00:00.000Z', member: true }, 'Session expired'],
     [{ roomId: 'room', inviteCode: 'ABC123', expiresAt: '2020-01-01T00:00:00.000Z', member: true }, 'Room expired'],
+    [{ roomId: 'room', inviteCode: 'ABC123', expiresAt: null as unknown as string, member: true }, 'Room expired'],
+    [{ roomId: 'room', inviteCode: 'ABC123', expiresAt: 'not-a-date', member: true }, 'Room expired'],
   ])('rejects missing membership, mismatched rooms, and expired rooms using minimal access data', async (access, expectedReason) => {
     const room = Object.create(RoomV2DurableObject.prototype) as unknown as {
       db: Record<string, unknown>
@@ -98,6 +100,16 @@ describe('Room V2 dice hot path', () => {
     expect(room.metrics[0].queueMs).toBeGreaterThanOrEqual(0)
     expect(room.metrics[0].storageMs).toBeGreaterThanOrEqual(0)
     expect(room.metrics[0].broadcastMs).toBeGreaterThanOrEqual(0)
+  })
+
+  it('reports exact queue, hash, compute, storage, broadcast, and total timing boundaries', async () => {
+    let clock = 0
+    const room = fixture({ now: () => { clock += 10; return clock }, hash: async () => 'hash' })
+    await room.commands.mutate('player-a', '甲', standardRoll('timed'), { receivedAtMs: 0 })
+    expect(room.metrics[0]).toMatchObject({
+      requestId: 'timed', preQueueMs: 10, queueMs: 10, hashMs: 10, computeMs: 10,
+      storageMs: 10, broadcastMs: 10, serverTotalMs: 60,
+    })
   })
 
   it('records a large pool at its actual size without truncating results', async () => {

@@ -2,7 +2,7 @@ import { DurableObject } from 'cloudflare:workers'
 import { parseMutationCommand, parseSyncRequest, type CharacterSheetJson, type MutationError, type RoomEvent, type RoomSnapshot } from '@dhgc/shared/desktop'
 import { CommandFailure, RoomV2Commands } from './room-v2-commands'
 import { verifyRoomV2Session, type RoomV2Session } from './room-v2-session'
-import { RoomV2Storage, type StoredMeta } from './room-v2-storage'
+import { isExpired, RoomV2Storage, type StoredMeta } from './room-v2-storage'
 
 export interface RoomV2Env {
   ROOMS_V2: DurableObjectNamespace<RoomV2DurableObject>
@@ -45,8 +45,7 @@ export class RoomV2DurableObject extends DurableObject<RoomV2Env> {
   }
 
   private expired(): boolean {
-    const expiresAt = this.db.roomExpiresAt()
-    return !expiresAt || Date.parse(expiresAt) <= Date.now()
+    return isExpired(this.db.roomExpiresAt())
   }
 
   async fetch(request: Request): Promise<Response> {
@@ -82,7 +81,7 @@ export class RoomV2DurableObject extends DurableObject<RoomV2Env> {
     if (url.pathname === '/internal/v2/replace' && request.method === 'POST') {
       const meta = this.db.meta()
       if (!meta) return json({ code: 'ROOM_NOT_FOUND' }, 404)
-      if (Date.parse(meta.expiresAt) <= Date.now()) return json({ code: 'ROOM_EXPIRED' }, 410)
+      if (isExpired(meta.expiresAt)) return json({ code: 'ROOM_EXPIRED' }, 410)
       const input = await request.json() as { requestId: string; sheet: CharacterSheetJson }
       try {
         const result = await this.commands.replace('delivery', input.requestId, input.sheet)
@@ -135,11 +134,12 @@ export class RoomV2DurableObject extends DurableObject<RoomV2Env> {
   }
 
   async webSocketMessage(socket: WebSocket, data: string | ArrayBuffer): Promise<void> {
+    const receivedAtMs = performance.now()
     const session = socket.deserializeAttachment() as RoomV2Session | null
     if (!session || session.exp <= Date.now() / 1000) { socket.close(1008, 'Session expired'); return }
     const access = this.db.sessionAccess(session.playerId)
     if (!access || session.roomId !== access.roomId || session.inviteCode !== access.inviteCode || !access.member) { socket.close(1008, 'Session expired'); return }
-    if (Date.parse(access.expiresAt) <= Date.now()) { socket.close(1008, 'Room expired'); return }
+    if (isExpired(access.expiresAt)) { socket.close(1008, 'Room expired'); return }
     let input: unknown
     try { input = JSON.parse(typeof data === 'string' ? data : new TextDecoder().decode(data)) }
     catch { this.send(socket, { type: 'operation.error', requestId: '', code: 'INVALID_COMMAND', message: '无效 JSON' }); return }
@@ -152,7 +152,7 @@ export class RoomV2DurableObject extends DurableObject<RoomV2Env> {
     try {
       const command = parseMutationCommand(input)
       requestId = command.requestId
-      const result = await this.commands.mutate(session.playerId, session.nickname, command)
+      const result = await this.commands.mutate(session.playerId, session.nickname, command, { receivedAtMs })
       this.send(socket, result.ack)
     } catch (error) {
       const code: MutationError['code'] = error instanceof CommandFailure ? error.code : 'INVALID_COMMAND'
@@ -168,7 +168,7 @@ export class RoomV2DurableObject extends DurableObject<RoomV2Env> {
   async alarm(): Promise<void> {
     const meta = this.db.meta()
     if (!meta) return
-    if (Date.parse(meta.expiresAt) > Date.now()) { await this.ctx.storage.setAlarm(Date.parse(meta.expiresAt)); return }
+    if (!isExpired(meta.expiresAt)) { await this.ctx.storage.setAlarm(Date.parse(meta.expiresAt)); return }
     for (const socket of this.ctx.getWebSockets()) socket.close(1008, 'Room expired')
     await this.ctx.storage.deleteAlarm()
     await this.ctx.storage.deleteAll()

@@ -1,0 +1,89 @@
+import { env, runInDurableObject } from 'cloudflare:test'
+import { describe, expect, it } from 'vitest'
+import type { RoomEvent } from '@dhgc/shared/desktop'
+import { signRoomV2Session } from '../room-v2-session'
+import { RoomV2Storage, type StoredMeta } from '../room-v2-storage'
+import type { RoomV2DurableObject } from '../room-v2'
+
+function meta(inviteCode: string): StoredMeta {
+  return {
+    roomId: `room-${inviteCode}`,
+    name: 'workerd integration',
+    inviteCode,
+    createdAt: new Date().toISOString(),
+    expiresAt: new Date(Date.now() + 60_000).toISOString(),
+    players: [{ id: 'player-a', nickname: '甲' }, { id: 'player-b', nickname: '乙' }],
+    protocolVersion: 2,
+  }
+}
+
+async function createRoom(inviteCode: string) {
+  const stub = env.ROOMS_V2.getByName(inviteCode)
+  const room = meta(inviteCode)
+  const response = await stub.fetch(new Request('https://room-v2.internal/internal/v2/create', { method: 'POST', body: JSON.stringify(room) }))
+  expect(response.status).toBe(200)
+  await response.arrayBuffer()
+  return { stub, room }
+}
+
+async function socketFor(stub: DurableObjectStub<RoomV2DurableObject>, room: StoredMeta, player: StoredMeta['players'][number]): Promise<WebSocket> {
+  const token = await signRoomV2Session(env.SESSION_SECRET, { roomId: room.roomId, inviteCode: room.inviteCode, playerId: player.id, nickname: player.nickname })
+  const response = await stub.fetch(new Request(`https://room-v2.internal/internal/v2/ws?token=${token}`, { headers: { Upgrade: 'websocket' } }))
+  expect(response.status).toBe(101)
+  const socket = response.webSocket
+  expect(socket).not.toBeNull()
+  socket!.accept()
+  return socket!
+}
+
+function nextRoll(socket: WebSocket): Promise<Extract<RoomEvent, { type: 'dice.rolled' }>> {
+  return new Promise((resolve, reject) => {
+    const timeout = setTimeout(() => reject(new Error('timed out waiting for dice.rolled')), 5_000)
+    socket.addEventListener('message', message => {
+      const value = JSON.parse(String(message.data)) as RoomEvent
+      if (value.type === 'dice.rolled') { clearTimeout(timeout); resolve(value) }
+    })
+  })
+}
+
+describe('Room V2 workerd integration', () => {
+  it('uses real SQLite membership and broadcasts one persisted roll to two WebSockets', async () => {
+    const { stub, room } = await createRoom('WRK001')
+    const first = await socketFor(stub, room, room.players[0])
+    const second = await socketFor(stub, room, room.players[1])
+    const firstRoll = nextRoll(first)
+    const secondRoll = nextRoll(second)
+    first.send(JSON.stringify({
+      type: 'dice.roll', protocolVersion: 2, requestId: 'workerd-roll',
+      payload: { mode: 'standard', modifier_mode: 'normal', repeat: 1, modifier: 0, dice: [{ sides: 20, count: 1 }] },
+    }))
+    const [initiator, observer] = await Promise.all([firstRoll, secondRoll])
+    expect(initiator.requestId).toBe('workerd-roll')
+    expect(observer.roll.id).toBe(initiator.roll.id)
+    expect(observer.roll).toEqual(initiator.roll)
+
+    await runInDurableObject(stub, async (_instance, state) => {
+      const storage = new RoomV2Storage(state.storage)
+      expect(storage.sessionAccess('player-a')).toMatchObject({ roomId: room.roomId, inviteCode: room.inviteCode, member: true })
+      expect(storage.sessionAccess('missing')).toMatchObject({ member: false })
+      expect(state.storage.sql.exec<{ seq: number }>('SELECT seq FROM panel_v2_meta WHERE id = 1').one().seq).toBe(1)
+      expect(state.storage.sql.exec<{ count: number }>('SELECT COUNT(*) AS count FROM panel_v2_receipts WHERE actor = ? AND request_id = ?', 'player-a', 'workerd-roll').one().count).toBe(1)
+      const record = state.storage.sql.exec<{ record_json: string }>('SELECT record_json FROM panel_v2_dice WHERE seq = 1').one()
+      expect(JSON.parse(record.record_json)).toEqual(initiator.roll)
+    })
+    first.close(); second.close()
+  })
+
+  it('rolls back intermediate SQLite writes when a transaction throws', async () => {
+    const { stub } = await createRoom('WRK002')
+    await runInDurableObject(stub, async (_instance, state) => {
+      expect(() => state.storage.transactionSync(() => {
+        state.storage.sql.exec("UPDATE panel_v2_meta SET seq = 99 WHERE id = 1")
+        state.storage.sql.exec("INSERT INTO panel_v2_dice (seq, id, record_json) VALUES (99, 'partial', '{}')")
+        throw new Error('injected transaction failure')
+      })).toThrow('injected transaction failure')
+      expect(state.storage.sql.exec<{ seq: number }>('SELECT seq FROM panel_v2_meta WHERE id = 1').one().seq).toBe(0)
+      expect(state.storage.sql.exec<{ count: number }>('SELECT COUNT(*) AS count FROM panel_v2_dice').one().count).toBe(0)
+    })
+  })
+})
