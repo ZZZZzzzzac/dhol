@@ -1,0 +1,16 @@
+name = "dhol-room-v2-stage8"
+main = "src/room-v2-stage8-worker.ts"
+compatibility_date = "2026-04-28"
+workers_dev = true
+
+[[durable_objects.bindings]]
+name = "ROOMS_V2"
+class_name = "RoomV2DurableObject"
+
+[[migrations]]
+tag = "v1-room-v2-stage8"
+new_sqlite_classes = ["RoomV2DurableObject"]
+
+[vars]
+ALLOWED_ORIGIN = "https://dhol-room-v2-stage8-ui.pages.dev"
+CHARACTER_INGEST_ORIGINS = "https://dhol-room-v2-stage8-ui.pages.dev"

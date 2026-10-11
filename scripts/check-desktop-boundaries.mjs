@@ -7,6 +7,7 @@ const root = process.cwd()
 const entries = [
   path.join(root, 'fronted/src/main.tsx'),
   path.join(root, 'fronted/src/desktop/DesktopApp.tsx'),
+  path.join(root, 'apps/realtime/src/room-v2-stage8-worker.ts'),
   path.join(root, 'apps/realtime/src/room-v2.ts'),
   path.join(root, 'apps/realtime/src/room-v2-http.ts'),
   path.join(root, 'apps/realtime/src/character-ingest.ts'),

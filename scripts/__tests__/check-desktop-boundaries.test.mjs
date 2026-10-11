@@ -15,7 +15,7 @@ test('boundary self-test rejects legacy backend and shared modules through barre
 test('boundary graph includes every production entrypoint', () => {
   const result = spawnSync(process.execPath, ['scripts/check-desktop-boundaries.mjs', '--show-entries'], { cwd: process.cwd(), encoding: 'utf8' })
   assert.equal(result.status, 0, result.stderr || result.stdout)
-  for (const entry of ['fronted/src/main.tsx', 'fronted/src/desktop/DesktopApp.tsx', 'apps/realtime/src/room-v2.ts', 'apps/realtime/src/room-v2-http.ts', 'apps/realtime/src/character-ingest.ts', 'packages/shared/src/desktop.ts']) assert.match(result.stdout, new RegExp(entry.replaceAll('/', '\\/').replaceAll('.', '\\.')))
+  for (const entry of ['fronted/src/main.tsx', 'fronted/src/desktop/DesktopApp.tsx', 'apps/realtime/src/room-v2-stage8-worker.ts', 'apps/realtime/src/room-v2.ts', 'apps/realtime/src/room-v2-http.ts', 'apps/realtime/src/character-ingest.ts', 'packages/shared/src/desktop.ts']) assert.match(result.stdout, new RegExp(entry.replaceAll('/', '\\/').replaceAll('.', '\\.')))
 })
 
 test('root scripts expose one non-recursive desktop boundary check', () => {
