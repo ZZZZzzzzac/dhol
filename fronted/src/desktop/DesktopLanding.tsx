@@ -70,7 +70,7 @@ export default function DesktopLanding({ onEnter }: { onEnter: (session: Desktop
       <div className="landing-window">
         {/* 顶部标题栏 */}
         <header className="landing-window__head">
-          <h1>联机面板</h1>
+          <h1>匕首之心在线面板</h1>
         </header>
 
         <div className="landing-window__body">
@@ -101,9 +101,9 @@ export default function DesktopLanding({ onEnter }: { onEnter: (session: Desktop
               </header>
               <form className="landing-action-cell__body" onSubmit={event => submit(event, 'create')}>
                 <div className="landing-form-group">
-                  <label htmlFor="room-name">房间名称</label>
                   <input
                     id="room-name"
+                    aria-label="房间名称"
                     className="landing-input"
                     value={roomName}
                     maxLength={60}
@@ -124,15 +124,14 @@ export default function DesktopLanding({ onEnter }: { onEnter: (session: Desktop
               </header>
               <form className="landing-action-cell__body" onSubmit={event => submit(event, 'join')}>
                 <div className="landing-form-group">
-                  <label htmlFor="invite-code">六位邀请码</label>
                   <input
                     id="invite-code"
+                    aria-label="六位邀请码"
                     className="landing-input landing-input--mono"
                     value={inviteCode}
                     maxLength={6}
                     spellCheck={false}
                     onChange={event => setInviteCode(event.target.value.toUpperCase())}
-                    placeholder="六位码"
                     required
                   />
                 </div>
@@ -149,7 +148,6 @@ export default function DesktopLanding({ onEnter }: { onEnter: (session: Desktop
               </header>
               <div className="landing-action-cell__body">
                 <div className="landing-form-group">
-                  <span className="landing-field-title">备份文件</span>
                   <label htmlFor="backup-file" className="landing-file-btn">
                     {backupName ? backupName : '点击选择备份文件'}
                   </label>

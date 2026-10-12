@@ -299,7 +299,7 @@
   
   <!-- 窗口顶栏 -->
   <header class="landing-window__head">
-    <h1 class="window-title">联机面板</h1>
+    <h1 class="window-title">匕首之心在线面板</h1>
   </header>
 
   <!-- 窗口主区 -->
@@ -331,10 +331,10 @@
         </header>
         <form class="action-cell__body" onsubmit="handleCreate(event)">
           <div class="form-group">
-            <label class="form-label" for="inp-room-name">房间名称</label>
             <input
               type="text"
               id="inp-room-name"
+              aria-label="房间名称"
               class="form-input"
               placeholder="未命名房间"
               maxlength="60"
@@ -351,12 +351,11 @@
         </header>
         <form class="action-cell__body" onsubmit="handleJoin(event)">
           <div class="form-group">
-            <label class="form-label" for="inp-invite-code">六位邀请码</label>
             <input
               type="text"
               id="inp-invite-code"
+              aria-label="六位邀请码"
               class="form-input form-input--mono"
-              placeholder="如 六位码"
               maxlength="6"
               oninput="handleInviteInput(this)"
             />
@@ -372,7 +371,6 @@
         </header>
         <form class="action-cell__body" onsubmit="handleRestore(event)">
           <div class="form-group">
-            <span class="form-label">备份文件</span>
             <label class="file-picker-btn" for="inp-backup-file" id="lbl-file-name">
               点击选择备份文件
             </label>
