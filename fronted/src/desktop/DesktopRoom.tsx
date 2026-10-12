@@ -124,8 +124,8 @@ export default function DesktopRoom({ session, onLeave }: { session: DesktopSess
 
   function mark(character: CharacterSummary, resource: TrackResource, index: number, marked: boolean) {
     submit({ type: 'character.setMark', name: character.name, generation: character.generation, resource, index, marked })
-    const label = resource === 'hp' ? '生命' : resource === 'stress' ? '压力' : '护甲'
-    addRoomLog(`${character.name} ${marked ? '标记' : '清除'}${label}第 ${index + 1} 格`)
+    const label = resource === 'hp' ? '生命' : resource === 'stress' ? '压力' : resource === 'gold' ? '金币' : '护甲'
+    addRoomLog(`${character.name} ${marked ? '标记' : '清除'}${label}${resource === 'gold' && index === 20 ? '箱' : `第 ${index + 1} 格`}`)
   }
 
   function remove(character: CharacterSummary) {
@@ -260,8 +260,10 @@ export default function DesktopRoom({ session, onLeave }: { session: DesktopSess
       <CharacterDetailDialog
         name={detail.character.name}
         state={detailState}
+        ready={ready}
         onClose={closeDetail}
         onRetry={() => void openDetail(detail.character)}
+        onGoldChange={(index, marked) => mark(detail.character, 'gold', index, marked)}
       />
     )}
 

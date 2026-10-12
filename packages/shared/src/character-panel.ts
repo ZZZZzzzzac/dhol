@@ -102,6 +102,7 @@ export function resourcesFromSheet(sheet: CharacterSheetJson): CharacterResource
     hp: track(sheet.hp, displayedResourceMax(sheet, 'hp')),
     stress: track(sheet.stress, displayedResourceMax(sheet, 'stress')),
     armor: track(sheet.armorBoxes, sheet.desktopView?.armorMax ?? sheet.armorMax),
+    gold: Array.from({ length: 21 }, (_, index) => Array.isArray(sheet.gold) && Boolean(sheet.gold[index])),
   }
 }
 

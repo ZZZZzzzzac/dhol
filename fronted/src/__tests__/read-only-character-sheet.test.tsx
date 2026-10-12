@@ -22,6 +22,14 @@ describe('read-only character sheet', () => {
     expect(safeImageSource('javascript:alert(1)')).toBeNull()
     expect(safeImageSource('https://example.com/a.png')).toBe('https://example.com/a.png')
   })
+  it('shows the saved chest mark and count from room resources', () => {
+    const gold = Array(21).fill(false)
+    gold[20] = true
+    const html = renderToStaticMarkup(<ReadOnlyCharacterSheet sheet={{ ruleSetId: 'daggerheart', name: '阿岚', hope: 3, gold: Array(20).fill(false) }} resources={{ hope: 3, hopeMax: 6, hp: [], stress: [], armor: [], gold }} onGoldChange={() => undefined} />)
+    expect(html).toMatch(/sheet-gold-chk--chest checked[^>]*aria-pressed="true"/)
+    expect(html).toContain('金币（箱）')
+    expect(html).toContain('1 / 1')
+  })
   it('shows the sent threshold and all edited source text in the read-only detail', () => {
     const html = renderToStaticMarkup(<ReadOnlyCharacterSheet sheet={{
       ruleSetId: 'daggerheart', name: '阿岚', hope: 3, cards: [], minorThreshold: '9', characterBackground: '刚修改的背景',

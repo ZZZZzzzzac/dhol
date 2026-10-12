@@ -1,6 +1,6 @@
 import type { TrackResource } from '@dhgc/shared/desktop'
 
-const labels: Record<TrackResource, string> = { hp: '生命', stress: '压力', armor: '护甲槽' }
+const labels: Record<TrackResource, string> = { hp: '生命', stress: '压力', armor: '护甲槽', gold: '金币' }
 
 export default function ResourceTrack({ resource, marks, disabled, onChange }: {
   resource: TrackResource

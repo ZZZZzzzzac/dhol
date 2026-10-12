@@ -62,7 +62,7 @@ export function parseMutationCommand(value: unknown): MutationCommand {
       if (command.delta !== 1 && command.delta !== -1) break
       return command as unknown as MutationCommand
     case 'character.setMark':
-      if (!['hp', 'stress', 'armor'].includes(String(command.resource)) || !Number.isSafeInteger(command.index) || (command.index as number) < 0 || typeof command.marked !== 'boolean') break
+      if (!['hp', 'stress', 'armor', 'gold'].includes(String(command.resource)) || !Number.isSafeInteger(command.index) || (command.index as number) < 0 || typeof command.marked !== 'boolean') break
       return command as unknown as MutationCommand
     case 'character.delete':
     case 'dice.clearHistory':

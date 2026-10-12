@@ -33,6 +33,21 @@ describe('Room V2 sync', () => {
     sync.destroy()
   })
 
+  it('keeps a gold chest mark through the pending command, event, and refreshed snapshot', () => {
+    const { sync, room, sent } = harness()
+    const character = room.characters[0]
+    const requestId = sync.submit({ type: 'character.setMark', name: character.name, generation: character.generation, resource: 'gold', index: 20, marked: true })
+    expect(sent.at(-1)).toMatchObject({ resource: 'gold', index: 20, marked: true })
+    expect(sync.getState().room?.characters[0].resources.gold?.[20]).toBe(true)
+    const resources = { ...character.resources, gold: [...(character.resources.gold ?? Array(21).fill(false))] }
+    resources.gold[20] = true
+    sync.receive({ type: 'character.resourcesChanged', requestId, seq: 1, name: character.name, generation: character.generation, resources })
+    expect(sync.pending()).toHaveLength(0)
+    sync.receive({ type: 'room.snapshot', protocolVersion: 2, room: { ...room, seq: 1, characters: [{ ...character, resources }] }, receipts: [] })
+    expect(sync.getState().room?.characters[0].resources.gold?.[20]).toBe(true)
+    sync.destroy()
+  })
+
   it('ignores old snapshots and requests a current snapshot for gaps', () => {
     const { sync, room, sent } = harness()
     sync.receive({ type: 'room.snapshot', protocolVersion: 2, room: { ...room, seq: 12, fear: { value: 5, max: 12 } }, receipts: [] })

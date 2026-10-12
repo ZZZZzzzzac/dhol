@@ -25,7 +25,7 @@ function project(room: RoomV2Model, pending: PendingOperation[]): RoomV2Model {
       const resources = { ...character.resources }
       if (command.type === 'character.adjustHope') resources.hope = Math.max(0, Math.min(resources.hopeMax, resources.hope + command.delta))
       else {
-        const track = resources[command.resource]
+        const track = command.resource === 'gold' ? resources.gold ?? Array(21).fill(false) as boolean[] : resources[command.resource]
         if (command.index >= track.length) continue
         resources[command.resource] = track.map((mark, index) => index === command.index ? command.marked : mark)
       }
@@ -41,7 +41,8 @@ function sameCharacter(left: CharacterSummary | undefined, right: CharacterSumma
   if (!left || !right || left.generation !== right.generation) return false
   const a = left.resources; const b = right.resources
   return a.hope === b.hope && a.hopeMax === b.hopeMax &&
-    (['hp', 'stress', 'armor'] as const).every(track => a[track].length === b[track].length && a[track].every((mark, index) => mark === b[track][index]))
+    (['hp', 'stress', 'armor'] as const).every(track => a[track].length === b[track].length && a[track].every((mark, index) => mark === b[track][index])) &&
+    (a.gold ?? []).length === (b.gold ?? []).length && (a.gold ?? []).every((mark, index) => mark === b.gold?.[index])
 }
 
 export class RoomSync {

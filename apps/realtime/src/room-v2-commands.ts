@@ -136,7 +136,7 @@ export class RoomV2Commands {
           resources.hope = Math.max(0, Math.min(previous.hopeMax, previous.hope + command.delta))
           if (resources.hope === previous.hope) return { event: null, write: () => undefined }
         } else {
-          const track = previous[command.resource]
+          const track = command.resource === 'gold' ? previous.gold ?? Array(21).fill(false) as boolean[] : previous[command.resource]
           if (command.index >= track.length) throw new CommandFailure('INVALID_COMMAND', '资源格索引无效')
           if (track[command.index] === command.marked) return { event: null, write: () => undefined }
           resources[command.resource] = track.map((mark, index) => index === command.index ? command.marked : mark)

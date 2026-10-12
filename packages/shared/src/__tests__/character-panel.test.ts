@@ -24,7 +24,7 @@ describe('JSON delivery', () => {
   it.each([dagger, island])('preserves a full %s sheet and its boolean resources', sheet => {
     const received = parseCharacterDelivery(deliver(sheet)).sheet
     expect(received).toEqual(sheet)
-    expect(resourcesFromSheet(received)).toEqual({ hope: sheet.hope, hopeMax: sheet.hopeMax, hp: sheet.hp, stress: sheet.stress, armor: sheet.armorBoxes })
+    expect(resourcesFromSheet(received)).toEqual({ hope: sheet.hope, hopeMax: sheet.hopeMax, hp: sheet.hp, stress: sheet.stress, armor: sheet.armorBoxes, gold: Array(21).fill(false) })
     expect(summaryFromSheet(received, resourcesFromSheet(received), 3, 0).attributes.agility).toBeTruthy()
   })
   it('replaces all data and resources while preserving position', () => {
@@ -47,6 +47,12 @@ describe('JSON delivery', () => {
     expect(resources.hp).toHaveLength(7)
     expect(resources.stress).toHaveLength(7)
     expect(resources.armor).toHaveLength(2)
+  })
+  it('keeps the chest as gold slot 21, including on resends', () => {
+    const sheet = { ...dagger, gold: [...Array(20).fill(false), true] }
+    expect(resourcesFromSheet(sheet).gold).toHaveLength(21)
+    expect(resourcesFromSheet(sheet).gold?.[20]).toBe(true)
+    expect(resourcesFromSheet({ ...sheet, gold: Array(20).fill(false) }).gold?.[20]).toBe(false)
   })
   it('includes the character builder’s permanent card bonus in displayed stress', () => {
     const sheet = { ...dagger, hp: Array(18).fill(false), hpMax: 7, stress: Array(18).fill(false), stressMax: 6,

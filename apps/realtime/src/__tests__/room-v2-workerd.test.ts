@@ -2,6 +2,7 @@ import { env, runInDurableObject } from 'cloudflare:test'
 import { describe, expect, it } from 'vitest'
 import { summaryFromSheet, type RoomEvent } from '@dhgc/shared/desktop'
 import { signRoomV2Session } from '../room-v2-session'
+import { RoomV2Commands } from '../room-v2-commands'
 import { RoomV2Storage, type StoredMeta } from '../room-v2-storage'
 import type { RoomV2DurableObject } from '../room-v2'
 
@@ -125,6 +126,25 @@ describe('Room V2 workerd integration', () => {
       expect(character.resources.hp[0]).toBe(true)
       expect(character.resources.stress[0]).toBe(true)
       expect(character.minorThreshold).toBe('17')
+    })
+  })
+
+  it('persists a clicked gold chest through a new storage read', async () => {
+    const { stub } = await createRoom('WRK004')
+    await runInDurableObject(stub, async (_instance, state) => {
+      const storage = new RoomV2Storage(state.storage)
+      const sheet = { ruleSetId: 'daggerheart' as const, name: '阿岚', hope: 2,
+        hp: Array(6).fill(false) as boolean[], stress: Array(6).fill(false) as boolean[],
+        armorBoxes: [false], gold: Array(20).fill(false) as boolean[], cards: [],
+      }
+      const resources = { hope: 2, hopeMax: 6, hp: sheet.hp, stress: sheet.stress, armor: sheet.armorBoxes, gold: Array(21).fill(false) as boolean[] }
+      storage.saveCharacter(sheet.name, 1, 0, sheet, summaryFromSheet(sheet, resources, 1, 0), resources)
+      const commands = new RoomV2Commands(storage, () => undefined)
+      await commands.mutate('player-a', '甲', { type: 'character.setMark', protocolVersion: 2, requestId: 'gold-chest', name: sheet.name, generation: 1, resource: 'gold', index: 20, marked: true })
+      const restored = new RoomV2Storage(state.storage)
+      expect(restored.sheet(sheet.name)?.resources.gold?.[20]).toBe(true)
+      expect((restored.sheet(sheet.name)?.sheet.gold as boolean[])[20]).toBe(true)
+      expect(restored.snapshot('player-a', [])?.room.characters[0].resources.gold?.[20]).toBe(true)
     })
   })
 })

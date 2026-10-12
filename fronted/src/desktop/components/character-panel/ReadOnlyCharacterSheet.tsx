@@ -1,4 +1,4 @@
-import { useState, type ReactNode } from 'react'
+import type { ReactNode } from 'react'
 import type { CharacterResources, CharacterSheetJson } from '@dhgc/shared/desktop'
 
 type SheetRecord = Record<string, unknown>
@@ -193,26 +193,14 @@ function ArmorCard({ name, baseScore, threshold, feature }: { name?: unknown; ba
 }
 
 // ===== GOLD CONTROLLER (Vehicle Sheet 3 Tiers) =====
-function GoldInteractive({ initialGold }: { initialGold?: unknown }) {
-  const [gold, setGold] = useState<boolean[]>(() => {
-    const arr = Array(20).fill(false)
-    if (Array.isArray(initialGold)) {
-      initialGold.slice(0, 20).forEach((v, i) => { arr[i] = Boolean(v) })
-    }
-    return arr
-  })
-  const [chest, setChest] = useState(false)
-
-  const toggle = (index: number) => {
-    setGold(prev => {
-      const next = [...prev]
-      next[index] = !next[index]
-      return next
-    })
-  }
+function GoldInteractive({ gold: savedGold, initialGold, onChange, disabled }: { gold?: boolean[]; initialGold?: unknown; onChange?: (index: number, marked: boolean) => void; disabled: boolean }) {
+  const source = savedGold ?? (Array.isArray(initialGold) ? initialGold : [])
+  const gold = Array.from({ length: 21 }, (_, index) => Boolean(source[index]))
+  const toggle = (index: number) => onChange?.(index, !gold[index])
 
   const handfulChecked = gold.slice(0, 10).filter(Boolean).length
   const bagChecked = gold.slice(10, 20).filter(Boolean).length
+  const chest = gold[20]
 
   return (
     <div className="sheet-gold-container">
@@ -226,6 +214,8 @@ function GoldInteractive({ initialGold }: { initialGold?: unknown }) {
               key={`handful-${i}`}
               className={`sheet-gold-chk ${checked ? 'checked' : ''}`}
               onClick={() => toggle(i)}
+              disabled={disabled || !onChange}
+              aria-pressed={checked}
               aria-label={`金币（把）${i + 1}`}
             />
           ))}
@@ -243,6 +233,8 @@ function GoldInteractive({ initialGold }: { initialGold?: unknown }) {
               key={`bag-${i}`}
               className={`sheet-gold-chk sheet-gold-chk--bag ${checked ? 'checked' : ''}`}
               onClick={() => toggle(10 + i)}
+              disabled={disabled || !onChange}
+              aria-pressed={checked}
               aria-label={`金币（袋）${i + 1}`}
             />
           ))}
@@ -257,7 +249,9 @@ function GoldInteractive({ initialGold }: { initialGold?: unknown }) {
           <button
             type="button"
             className={`sheet-gold-chk sheet-gold-chk--chest ${chest ? 'checked' : ''}`}
-            onClick={() => setChest(v => !v)}
+            onClick={() => toggle(20)}
+            disabled={disabled || !onChange}
+            aria-pressed={chest}
             aria-label="金币（箱）"
           />
         </div>
@@ -300,7 +294,7 @@ function sourceFields(value: unknown, path: string[] = []): Array<[string, strin
 }
 
 // ===== MAIN COMPONENT =====
-export default function ReadOnlyCharacterSheet({ sheet: originalSheet, resources: _resources }: { sheet: CharacterSheetJson; resources: CharacterResources }) {
+export default function ReadOnlyCharacterSheet({ sheet: originalSheet, resources, onGoldChange, disabled = false }: { sheet: CharacterSheetJson; resources: CharacterResources; onGoldChange?: (index: number, marked: boolean) => void; disabled?: boolean }) {
   const view = originalSheet.desktopView
   const sheet = view ? {
     ...originalSheet,
@@ -421,7 +415,7 @@ export default function ReadOnlyCharacterSheet({ sheet: originalSheet, resources
             <h3 className="sheet-block__title">金币存量</h3>
           </header>
           <div className="sheet-block__body">
-            <GoldInteractive initialGold={sheet.gold} />
+            <GoldInteractive gold={resources.gold} initialGold={sheet.gold} onChange={onGoldChange} disabled={disabled} />
           </div>
         </section>
       </div>

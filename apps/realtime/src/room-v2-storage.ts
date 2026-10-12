@@ -130,6 +130,7 @@ export class RoomV2Storage {
       hp: Array.from({ length: displayedResourceMax(sheet, 'hp') }, (_, index) => Boolean(resources.hp[index])),
       stress: Array.from({ length: displayedResourceMax(sheet, 'stress') }, (_, index) => Boolean(resources.stress[index])),
       armor: resources.armor.slice(0, sheet.desktopView?.armorMax ?? (typeof sheet.armorMax === 'number' ? sheet.armorMax : resources.armor.length)),
+      gold: Array.from({ length: 21 }, (_, index) => Boolean((resources.gold ?? (Array.isArray(sheet.gold) ? sheet.gold : []))[index])),
     }
   }
 
@@ -200,7 +201,9 @@ export class RoomV2Storage {
   sheet(name: string): { generation: number; sheet: CharacterSheetJson; resources: CharacterResources } | null {
     const row = this.character(name)
     const resources = this.resources(name)
-    return row && resources ? { generation: row.generation, sheet: JSON.parse(row.source_json) as CharacterSheetJson, resources } : null
+    if (!row || !resources) return null
+    const sheet = JSON.parse(row.source_json) as CharacterSheetJson
+    return { generation: row.generation, sheet: { ...sheet, gold: resources.gold }, resources }
   }
 
   export(): unknown {
