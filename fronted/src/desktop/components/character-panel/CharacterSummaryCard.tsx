@@ -7,15 +7,14 @@ const attributes: Array<[keyof CharacterSummary['attributes'], string]> = [
   ['instinct', '本能'], ['presence', '风度'], ['knowledge', '知识'],
 ]
 
-function CharacterSummaryCard({ character, ready, onHope, onMark, onDetail, onDelete, onQuickRollStat, onQuickRollWeapon }: {
+function CharacterSummaryCard({ character, ready, onHope, onMark, onDetail, onDelete, onQuickRollStat }: {
   character: CharacterSummary
   ready: boolean
   onHope: (delta: 1 | -1) => void
   onMark: (resource: TrackResource, index: number, marked: boolean) => void
   onDetail: () => void
   onDelete: () => void
-  onQuickRollStat?: (statName: string, statVal: string) => void
-  onQuickRollWeapon?: (weaponName: string, weaponDamage: string) => void
+  onQuickRollStat: (character: CharacterSummary, statName: string, statVal: string) => void
 }) {
   const value = (item: string | null) => item ?? '—'
   const hopeSlots = Array.from({ length: character.resources.hopeMax || 6 }, (_, i) => i < character.resources.hope)
@@ -58,18 +57,15 @@ function CharacterSummaryCard({ character, ready, onHope, onMark, onDetail, onDe
     <dl className="character-card__attributes">
       {attributes.map(([key, label]) => {
         const val = value(character.attributes[key])
-        return <div key={key} className="attr-cell" onClick={() => onQuickRollStat?.(label, val)}>
-          <dt>{label}</dt><dd>{val}</dd>
-        </div>
+        return <div key={key} className="attr-cell"><button type="button" disabled={!ready || character.attributes[key] === null}
+          aria-label={`${character.name} ${label}${val}，掷二元骰`} onClick={() => onQuickRollStat(character, label, val)}>
+          <span>{label}</span><strong>{val}</strong>
+        </button></div>
       })}
     </dl>
     <div className="character-card__weapons">
-      <span className="weapon-btn" onClick={() => onQuickRollWeapon?.('主武器', value(character.primaryWeaponDamage))}>
-        <small>主武器伤害</small><strong>{value(character.primaryWeaponDamage)}</strong>
-      </span>
-      {character.secondaryWeaponDamage && <span className="weapon-btn" onClick={() => onQuickRollWeapon?.('副武器', value(character.secondaryWeaponDamage))}>
-        <small>副武器伤害</small><strong>{value(character.secondaryWeaponDamage)}</strong>
-      </span>}
+      <div className="weapon-info"><small>主武器</small><strong>{value(character.primaryWeaponName)}</strong><span>{[character.primaryWeaponTrait, character.primaryWeaponRange].filter(Boolean).join(' · ') || '属性 / 攻击距离未填写'}</span></div>
+      {character.secondaryWeaponName && <div className="weapon-info"><small>副武器</small><strong>{character.secondaryWeaponName}</strong><span>{[character.secondaryWeaponTrait, character.secondaryWeaponRange].filter(Boolean).join(' · ') || '属性 / 攻击距离未填写'}</span></div>}
     </div>
     <footer>
       <button type="button" className="button button--primary btn-detail" onClick={onDetail}>完整信息</button>

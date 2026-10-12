@@ -121,8 +121,16 @@ export class RoomV2Storage {
   }
 
   resources(name: string): CharacterResources | null {
-    const row = this.storage.sql.exec<ResourceRow>('SELECT resources_json FROM panel_v2_resources WHERE name = ?', name).toArray()[0]
-    return row ? JSON.parse(row.resources_json) as CharacterResources : null
+    const row = this.storage.sql.exec<ResourceRow & { source_json: string }>('SELECT r.resources_json, c.source_json FROM panel_v2_resources r JOIN panel_v2_characters c ON c.name = r.name WHERE r.name = ?', name).toArray()[0]
+    if (!row) return null
+    const resources = JSON.parse(row.resources_json) as CharacterResources
+    const sheet = JSON.parse(row.source_json) as CharacterSheetJson
+    return {
+      ...resources,
+      hp: resources.hp.slice(0, typeof sheet.hpMax === 'number' ? sheet.hpMax : resources.hp.length),
+      stress: resources.stress.slice(0, typeof sheet.stressMax === 'number' ? sheet.stressMax : resources.stress.length),
+      armor: resources.armor.slice(0, typeof sheet.armorMax === 'number' ? sheet.armorMax : resources.armor.length),
+    }
   }
 
   nextPosition(): number {
@@ -171,10 +179,10 @@ export class RoomV2Storage {
       const row = this.metaRow()
       if (!row) return null
       const meta = JSON.parse(row.room_json) as StoredMeta
-      const characters = this.storage.sql.exec<Pick<CharacterRow, 'name' | 'summary_json'>>('SELECT name, summary_json FROM panel_v2_characters ORDER BY position').toArray().map(item => ({
-        ...JSON.parse(item.summary_json) as CharacterSummary,
-        resources: this.resources(item.name)!,
-      }))
+      const characters = this.storage.sql.exec<CharacterRow>('SELECT name, generation, position, source_json, summary_json FROM panel_v2_characters ORDER BY position').toArray().map(item => {
+        const resources = this.resources(item.name)!
+        return summaryFromSheet(JSON.parse(item.source_json) as CharacterSheetJson, resources, item.generation, item.position)
+      })
       const dice = this.storage.sql.exec<DiceRow>('SELECT record_json FROM panel_v2_dice ORDER BY seq DESC LIMIT 50').toArray().reverse().map(item => JSON.parse(item.record_json) as DiceRollRecord)
       return {
         room: {

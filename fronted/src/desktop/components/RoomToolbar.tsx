@@ -3,25 +3,25 @@ import type { ReactNode } from 'react'
 export default function RoomToolbar({
   roomName,
   inviteCode,
-  nickname,
   status,
   save,
   reason,
   activeCount,
   xCardNode,
-  onBackup,
-  onLeave
+  onImport,
+  onReset,
+  onExport
 }: {
   roomName: string
   inviteCode: string
-  nickname: string
   status: string
   save: string
   reason: string | null
   activeCount?: number
   xCardNode?: ReactNode
-  onBackup: () => void
-  onLeave: () => void
+  onImport: () => void
+  onReset: () => void
+  onExport: () => void
 }) {
   const copy = () => void navigator.clipboard?.writeText(inviteCode)
 
@@ -41,10 +41,12 @@ export default function RoomToolbar({
         <span>{status === 'ready' ? '已连接' : status === 'expired' ? '已过期' : '正在连接'}<small>{save}{reason ? ` · ${reason}` : ''}</small></span>
       </div>
       {typeof activeCount === 'number' && <div className="member-count-badge">{activeCount}人在线</div>}
-      <span className="nickname">{nickname}</span>
+    </div>
+    <div className="room-toolbar__actions">
       {xCardNode}
-      <button type="button" className="button button--ghost" onClick={onBackup}>备份</button>
-      <button type="button" className="button button--ghost" onClick={onLeave}>离开</button>
+      <button type="button" className="button button--primary" onClick={onImport}>+ 导入角色</button>
+      <button type="button" className="button button--ghost" onClick={onReset}>重置</button>
+      <button type="button" className="button button--ghost" onClick={onExport}>导出</button>
     </div>
   </header>
 }

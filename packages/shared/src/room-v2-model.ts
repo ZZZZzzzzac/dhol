@@ -22,7 +22,13 @@ export interface CharacterSummary {
   minorThreshold: string | null
   majorThreshold: string | null
   attributes: Record<'agility' | 'strength' | 'finesse' | 'instinct' | 'presence' | 'knowledge', string | null>
+  primaryWeaponName: string | null
+  primaryWeaponTrait: string | null
+  primaryWeaponRange: string | null
   primaryWeaponDamage: string | null
+  secondaryWeaponName: string | null
+  secondaryWeaponTrait: string | null
+  secondaryWeaponRange: string | null
   secondaryWeaponDamage: string | null
 }
 export interface RoomMember {

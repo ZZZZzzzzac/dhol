@@ -41,6 +41,13 @@ describe('JSON delivery', () => {
     expect(replaceCharacter(replaced, 'room-b', dagger, 2)).toHaveLength(2)
     expect(replaceCharacter([{ ...replaced[0], position: 3 }], 'room-a', island, 9)[1].position).toBe(4)
   })
+  it('uses displayed maxima rather than padded track array lengths', () => {
+    const sheet = { ...dagger, hp: Array(18).fill(false), hpMax: 7, stress: Array(18).fill(false), stressMax: 7, armorBoxes: Array(12).fill(false), armorMax: 2 }
+    const resources = resourcesFromSheet(sheet)
+    expect(resources.hp).toHaveLength(7)
+    expect(resources.stress).toHaveLength(7)
+    expect(resources.armor).toHaveLength(2)
+  })
   it.each([
     [deliver({ ...dagger, name: ' ' }), 'INVALID_CHARACTER'],
     [deliver({ ...dagger, ruleSetId: 'other' }), 'INVALID_CHARACTER'],

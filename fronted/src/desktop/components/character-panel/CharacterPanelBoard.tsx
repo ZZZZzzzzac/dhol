@@ -3,7 +3,7 @@ import type { CharacterSummary, TrackResource } from '@dhgc/shared/desktop'
 import CharacterSummaryCard from './CharacterSummaryCard'
 import { charactersOnPage, pageCount } from './pagination'
 
-export default function CharacterPanelBoard({ characters, page, ready, onPage, onHope, onMark, onDetail, onDelete, onQuickRollStat, onQuickRollWeapon }: {
+export default function CharacterPanelBoard({ characters, page, ready, onPage, onHope, onMark, onDetail, onDelete, onQuickRollStat }: {
   characters: CharacterSummary[]
   page: number
   ready: boolean
@@ -12,8 +12,7 @@ export default function CharacterPanelBoard({ characters, page, ready, onPage, o
   onMark: (character: CharacterSummary, resource: TrackResource, index: number, marked: boolean) => void
   onDetail: (character: CharacterSummary) => void
   onDelete: (character: CharacterSummary) => void
-  onQuickRollStat?: (statName: string, statVal: string) => void
-  onQuickRollWeapon?: (weaponName: string, weaponDamage: string) => void
+  onQuickRollStat: (character: CharacterSummary, statName: string, statVal: string) => void
 }) {
   const [deleteTarget, setDeleteTarget] = useState<CharacterSummary | null>(null)
   const pages = pageCount(characters.length)
@@ -36,7 +35,6 @@ export default function CharacterPanelBoard({ characters, page, ready, onPage, o
           onDetail={() => onDetail(character)}
           onDelete={() => setDeleteTarget(character)}
           onQuickRollStat={onQuickRollStat}
-          onQuickRollWeapon={onQuickRollWeapon}
         />
       ))}
     </div>

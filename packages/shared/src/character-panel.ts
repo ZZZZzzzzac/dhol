@@ -23,12 +23,16 @@ function attribute(value: unknown): string | null {
 }
 
 export function resourcesFromSheet(sheet: CharacterSheetJson): CharacterResources {
+  const track = (marks: unknown, max: unknown): boolean[] => {
+    if (!Array.isArray(marks)) return []
+    return [...marks.slice(0, typeof max === 'number' ? max : marks.length)] as boolean[]
+  }
   return {
     hope: sheet.hope,
     hopeMax: typeof sheet.hopeMax === 'number' ? sheet.hopeMax : 6,
-    hp: Array.isArray(sheet.hp) ? [...sheet.hp] as boolean[] : [],
-    stress: Array.isArray(sheet.stress) ? [...sheet.stress] as boolean[] : [],
-    armor: Array.isArray(sheet.armorBoxes) ? [...sheet.armorBoxes] as boolean[] : [],
+    hp: track(sheet.hp, sheet.hpMax),
+    stress: track(sheet.stress, sheet.stressMax),
+    armor: track(sheet.armorBoxes, sheet.armorMax),
   }
 }
 
@@ -43,7 +47,13 @@ export function summaryFromSheet(sheet: CharacterSheetJson, resources: Character
       finesse: attribute(sheet.finesse), instinct: attribute(sheet.instinct),
       presence: attribute(sheet.presence), knowledge: attribute(sheet.knowledge),
     },
+    primaryWeaponName: display(sheet.primaryWeaponName),
+    primaryWeaponTrait: display(sheet.primaryWeaponTrait),
+    primaryWeaponRange: display(sheet.primaryWeaponRange ?? sheet.primaryWeaponDistance),
     primaryWeaponDamage: display(sheet.primaryWeaponDamage),
+    secondaryWeaponName: display(sheet.secondaryWeaponName),
+    secondaryWeaponTrait: display(sheet.secondaryWeaponTrait),
+    secondaryWeaponRange: display(sheet.secondaryWeaponRange ?? sheet.secondaryWeaponDistance),
     secondaryWeaponDamage: display(sheet.secondaryWeaponDamage),
   }
 }

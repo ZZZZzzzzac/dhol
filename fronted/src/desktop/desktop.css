@@ -125,6 +125,8 @@ input, select, textarea {
   align-items: center;
   gap: 16px;
   padding: 10px 0;
+  border-right: 1px solid var(--border-subtle);
+  padding-right: 20px;
 }
 
 .brand-logo {
@@ -149,6 +151,24 @@ input, select, textarea {
   font-family: var(--font-mono);
   font-size: 14px;
   font-weight: 700;
+  position: absolute;
+  left: 50%;
+  top: 50%;
+  transform: translate(-50%, -50%);
+}
+
+.room-toolbar__actions {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  border-left: 1px solid var(--border-subtle);
+  padding-left: 20px;
+}
+
+@media (max-width: 1100px) {
+  .room-toolbar { flex-wrap: wrap; gap: 8px; padding-bottom: 8px; }
+  .room-toolbar__session { position: static; transform: none; order: 3; width: 100%; justify-content: center; }
+  .room-toolbar__actions { border-left: 0; padding-left: 0; flex-wrap: wrap; }
 }
 
 .invite-code {
@@ -172,6 +192,8 @@ input, select, textarea {
 .connection-badge[data-status="ready"] i {
   background: var(--blue);
 }
+
+.connection-badge[data-status="ready"] { color: var(--blue); }
 
 .connection-badge[data-status="expired"] i {
   background: var(--red);
@@ -408,7 +430,7 @@ input, select, textarea {
 
 .clock-del-btn:hover {
   border-color: var(--red);
-  color: var(--red);
+  color: var(--red) !important;
   background: transparent !important;
 }
 
