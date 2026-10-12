@@ -186,7 +186,7 @@ export default function DicePanel({
               <div className="result-banner">
                 <div>
                   <div className={`result-verdict ${latestDual.critical ? 'crit' : latestDual.outcome === 'hope' ? 'hope' : 'fear'}`}>
-                    {latestDual.critical ? '大成功' : latestDual.outcome === 'hope' ? '希望结果' : '恐惧结果'}
+                    {latestDual.critical ? '关键成功' : latestDual.outcome === 'hope' ? '希望结果' : '恐惧结果'}
                   </div>
                   <div className="result-formula">
                     希望[{latestDual.hope}] + 恐惧[{latestDual.fear}]
@@ -286,7 +286,7 @@ export default function DicePanel({
               let tagClass = ''
               if (res) {
                 if (res.critical) {
-                  tagText = '大成功'
+                  tagText = '关键成功'
                   tagClass = 'hist-tag--crit'
                 } else if (res.outcome === 'hope') {
                   tagText = '希望结果'

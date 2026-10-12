@@ -12,6 +12,10 @@
   --red-subtle: #FDEEEC;
   --blue: #004BD6;
   --blue-subtle: #EDF3FD;
+  --yellow: #E5A000;
+  --yellow-hover: #C58800;
+  --yellow-dark: #B45309;
+  --yellow-subtle: #FFF8E6;
 
   --border: #111111;
   --border-subtle: #D0D0C8;
@@ -589,7 +593,7 @@ input, select, textarea {
 }
 
 .result-verdict { font-size: 24px; font-weight: 900; }
-.result-verdict.crit { color: var(--red); }
+.result-verdict.crit { color: var(--yellow-dark); }
 .result-verdict.hope { color: var(--blue); }
 .result-verdict.fear { color: var(--red); }
 
@@ -671,7 +675,7 @@ input, select, textarea {
 .hist-val { font-size: 18px; font-weight: 900; }
 
 .hist-tag { font-size: 11px; font-weight: 800; padding: 1px 5px; }
-.hist-tag--crit { background: var(--red); color: #fff; }
+.hist-tag--crit { background: var(--yellow); color: var(--ink); }
 .hist-tag--hope { background: var(--blue); color: #fff; }
 .hist-tag--fear { background: var(--red); color: #fff; }
 
