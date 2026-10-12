@@ -42,6 +42,56 @@ function attribute(value: unknown): string | null {
     : display(value)
 }
 
+const BUILTIN_PROFESSIONS: Record<string, string> = {
+  bard: '吟游诗人',
+  druid: '德鲁伊',
+  guardian: '守护者',
+  ranger: '游侠',
+  rogue: '游荡者',
+  seraph: '神使',
+  sorcerer: '术士',
+  warrior: '战士',
+  wizard: '法师',
+}
+
+export function professionFromSheet(sheet: CharacterSheetJson): string | null {
+  if (Array.isArray(sheet.cards)) {
+    const profCard = sheet.cards.find(card =>
+      card && typeof card === 'object' && (
+        ('type' in card && card.type === 'profession') ||
+        ('id' in card && typeof sheet.profession === 'string' && card.id === sheet.profession)
+      )
+    ) as Record<string, unknown> | undefined
+    if (profCard) {
+      const cardName = display(profCard.name ?? profCard['名称'])
+      if (cardName) return cardName
+    }
+  }
+
+  if (sheet.professionRef && typeof sheet.professionRef === 'object') {
+    const ref = sheet.professionRef as Record<string, unknown>
+    const refName = display(ref.name ?? ref['名称'])
+    if (refName) {
+      const clean = refName.split(/\s*[-–—]\s*/)[0]?.trim()
+      if (clean) return clean
+      return refName
+    }
+  }
+
+  const raw = display(sheet.profession)
+  if (!raw) return null
+
+  const builtin = BUILTIN_PROFESSIONS[raw.toLowerCase()]
+  if (builtin) return builtin
+
+  if (raw.includes('-prof-')) {
+    const suffix = raw.split('-prof-').pop()?.trim()
+    if (suffix) return suffix
+  }
+
+  return raw
+}
+
 function experienceRows(names: unknown, bonuses: unknown, kind: 'standard' | 'ancestry'): NonNullable<CharacterSummary['experiences']> {
   if (!Array.isArray(names)) return []
   return names.flatMap((rawName, index) => {
@@ -110,7 +160,7 @@ export function summaryFromSheet(sheet: CharacterSheetJson, resources: Character
   const shownAttribute = (key: CharacterAttribute) => sheet.desktopView ? display(sheet.desktopView.attributes[key]) : attribute(sheet[key])
   return {
     name: characterNameKey(sheet.name), ruleSetId: sheet.ruleSetId, generation, position,
-    resources, level: display(sheet.level), profession: display(sheet.profession),
+    resources, level: display(sheet.level), profession: professionFromSheet(sheet),
     evasion: display(sheet.desktopView?.evasion ?? sheet.evasion), armorValue: display(sheet.desktopView?.armorValue ?? sheet.armorValue),
     minorThreshold: display(sheet.desktopView?.minorThreshold ?? sheet.minorThreshold), majorThreshold: display(sheet.desktopView?.majorThreshold ?? sheet.majorThreshold),
     attributes: {

@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest'
 import daggerheart from './fixtures/daggerheart-sheet.json'
 import rhodes from './fixtures/rhodes-sheet.json'
-import { characterNameKey, displayedResourceMax, replaceCharacter, resourcesFromSheet, summaryFromSheet, type CharacterSheetJson } from '../character-panel'
+import { characterNameKey, displayedResourceMax, professionFromSheet, replaceCharacter, resourcesFromSheet, summaryFromSheet, type CharacterSheetJson } from '../character-panel'
 import { parseCharacterDelivery } from '../room-v2-validation'
 
 const dagger = daggerheart as CharacterSheetJson
@@ -103,5 +103,49 @@ describe('JSON delivery', () => {
     ['x'.repeat(545 * 1024), 'PAYLOAD_TOO_LARGE'],
   ])('rejects malformed delivery (%s)', (body, code) => {
     expect(() => parseCharacterDelivery(body)).toThrowError(expect.objectContaining({ code }))
+  })
+})
+
+describe('profession display resolution', () => {
+  it('extracts Chinese name from profession card for card pack resources', () => {
+    const sheet = {
+      ...dagger,
+      profession: '观星者&魔器师+奇迹领域-不冻港-prof-观星者',
+      cards: [
+        { id: '观星者&魔器师+奇迹领域-不冻港-prof-观星者', name: '观星者', type: 'profession' },
+      ],
+    }
+    expect(professionFromSheet(sheet)).toBe('观星者')
+    expect(summaryFromSheet(sheet, resourcesFromSheet(sheet), 1, 0).profession).toBe('观星者')
+  })
+
+  it('translates built-in English profession ids to Chinese', () => {
+    expect(professionFromSheet({ ...dagger, profession: 'Warrior' })).toBe('战士')
+    expect(professionFromSheet({ ...dagger, profession: 'Guardian' })).toBe('守护者')
+    expect(professionFromSheet({ ...dagger, profession: 'Bard' })).toBe('吟游诗人')
+  })
+
+  it('cleans domain suffixes from professionRef name if cards array is absent', () => {
+    const sheet = {
+      ...dagger,
+      profession: '观星者&魔器师+奇迹领域-不冻港-prof-观星者',
+      professionRef: { id: '观星者&魔器师+奇迹领域-不冻港-prof-观星者', name: '观星者  -  奇迹&辉耀' },
+      cards: [],
+    }
+    expect(professionFromSheet(sheet)).toBe('观星者')
+  })
+
+  it('falls back to extracting profession from -prof- id if cards and ref are absent', () => {
+    const sheet = {
+      ...dagger,
+      profession: '观星者&魔器师+奇迹领域-不冻港-prof-魔器师',
+      cards: [],
+    }
+    expect(professionFromSheet(sheet)).toBe('魔器师')
+  })
+
+  it('preserves existing Chinese profession names', () => {
+    expect(professionFromSheet({ ...dagger, profession: '游侠' })).toBe('游侠')
+    expect(professionFromSheet({ ...dagger, profession: '先锋' })).toBe('先锋')
   })
 })

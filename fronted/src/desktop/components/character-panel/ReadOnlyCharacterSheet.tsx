@@ -1,5 +1,5 @@
 import type { ReactNode } from 'react'
-import type { CharacterResources, CharacterSheetJson } from '@dhgc/shared/desktop'
+import { professionFromSheet, type CharacterResources, type CharacterSheetJson } from '@dhgc/shared/desktop'
 
 type SheetRecord = Record<string, unknown>
 
@@ -307,7 +307,7 @@ export default function ReadOnlyCharacterSheet({ sheet: originalSheet, resources
     secondaryWeaponRange: view.secondaryWeaponRange,
   } : originalSheet
   // 1. Tags
-  const professionName = scalar(sheet.professionRef && typeof sheet.professionRef === 'object' && 'name' in sheet.professionRef ? sheet.professionRef.name : sheet.profession)
+  const professionName = professionFromSheet(sheet)
   const subclassName = scalar(sheet.subclassRef && typeof sheet.subclassRef === 'object' && 'name' in sheet.subclassRef ? sheet.subclassRef.name : sheet.subclass)
   const ancestry1 = scalar(sheet.ancestry1Ref && typeof sheet.ancestry1Ref === 'object' && 'name' in sheet.ancestry1Ref ? sheet.ancestry1Ref.name : sheet.ancestry1)
   const community = scalar(sheet.communityRef && typeof sheet.communityRef === 'object' && 'name' in sheet.communityRef ? sheet.communityRef.name : sheet.community)
