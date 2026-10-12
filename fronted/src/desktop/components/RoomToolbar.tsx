@@ -6,7 +6,8 @@ export default function RoomToolbar({
   status,
   activeCount,
   xCardNode,
-  onExport
+  onExport,
+  onLeave,
 }: {
   roomName: string
   inviteCode: string
@@ -14,6 +15,7 @@ export default function RoomToolbar({
   activeCount?: number
   xCardNode?: ReactNode
   onExport: () => void
+  onLeave: () => void
 }) {
   const copy = () => void navigator.clipboard?.writeText(inviteCode)
 
@@ -37,6 +39,7 @@ export default function RoomToolbar({
     <div className="room-toolbar__actions">
       {xCardNode}
       <button type="button" className="button button--ghost" onClick={onExport}>导出</button>
+      <button type="button" className="button button--ghost" onClick={onLeave}>退出房间</button>
     </div>
   </header>
 }

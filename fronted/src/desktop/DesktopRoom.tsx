@@ -184,6 +184,7 @@ export default function DesktopRoom({ session, onLeave }: { session: DesktopSess
       activeCount={room?.members.filter(m => m.online).length}
       xCardNode={<XCard active={Boolean(room?.xCard.active)} ready={ready} onChange={handleXCardChange} />}
       onExport={() => sync.ui.setDialog('backup')}
+      onLeave={onLeave}
     />
 
     <div className="desktop-workspace">
