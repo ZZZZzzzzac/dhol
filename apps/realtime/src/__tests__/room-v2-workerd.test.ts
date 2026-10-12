@@ -108,9 +108,13 @@ describe('Room V2 workerd integration', () => {
     const { stub } = await createRoom('WRK003')
     await runInDurableObject(stub, async (_instance, state) => {
       const storage = new RoomV2Storage(state.storage)
-      const sheet = { ruleSetId: 'daggerheart' as const, name: '阿德兰', hope: 3, hpMax: 7, stressMax: 6,
+      const sheet = { ruleSetId: 'daggerheart' as const, name: '阿德兰', hope: 3, hpMax: 18, stressMax: 18,
         hp: Array(18).fill(false) as boolean[], stress: Array(18).fill(false) as boolean[], armorBoxes: Array(12).fill(false) as boolean[],
-        cards: [{ id: 'Human-HighStamina' }] }
+        cards: [{ id: 'Human-HighStamina' }],
+        desktopView: { version: 1 as const, evasion: '9', armorValue: '2', minorThreshold: '17', majorThreshold: '26',
+          attributes: { agility: '+2', strength: '+3', finesse: '0', instinct: '+1', presence: '0', knowledge: '-1' },
+          hpMax: 7, stressMax: 7, armorMax: 12, primaryWeaponAttribute: '', primaryWeaponRange: '', secondaryWeaponAttribute: '', secondaryWeaponRange: '' },
+      }
       const resources = { hope: 3, hopeMax: 6, hp: [...sheet.hp], stress: [...sheet.stress], armor: [...sheet.armorBoxes] }
       resources.hp[0] = true
       resources.stress[0] = true
@@ -120,6 +124,7 @@ describe('Room V2 workerd integration', () => {
       expect(character.resources.stress).toHaveLength(7)
       expect(character.resources.hp[0]).toBe(true)
       expect(character.resources.stress[0]).toBe(true)
+      expect(character.minorThreshold).toBe('17')
     })
   })
 })

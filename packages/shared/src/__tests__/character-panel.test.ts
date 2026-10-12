@@ -56,13 +56,31 @@ describe('JSON delivery', () => {
     expect(resourcesFromSheet(sheet).hp).toHaveLength(7)
     expect(resourcesFromSheet(sheet).stress).toHaveLength(7)
   })
+  it('uses the builder display snapshot while preserving every edited source field on replacement', () => {
+    const desktopView = {
+      version: 1, evasion: '12', armorValue: '3', minorThreshold: '17', majorThreshold: '28',
+      attributes: { agility: '+3', strength: '+1', finesse: '0', instinct: '+2', presence: '-1', knowledge: '0' },
+      hpMax: 7, stressMax: 7, armorMax: 3,
+      primaryWeaponAttribute: '敏捷', primaryWeaponRange: '远距离', secondaryWeaponAttribute: '', secondaryWeaponRange: '',
+    }
+    const edited = { ...dagger, name: '阿岚', hp: Array(18).fill(false), stress: Array(18).fill(false),
+      minorThreshold: '9', minorThresholdManualModifier: '8', characterBackground: '发送前编辑的背景', desktopView }
+    const parsed = parseCharacterDelivery(JSON.stringify({ schemaVersion: 2, sheet: edited })).sheet
+    const replaced = replaceCharacter(replaceCharacter([], 'room-a', dagger, 1), 'room-a', parsed, 2)
+    expect(replaced[0].sheet).toEqual(edited)
+    expect(replaced[0].resources.hp).toHaveLength(7)
+    expect(replaced[0].resources.stress).toHaveLength(7)
+    expect(summaryFromSheet(parsed, replaced[0].resources, 2, 0)).toMatchObject({ minorThreshold: '17', attributes: { agility: '+3' }, primaryWeaponRange: '远距离' })
+  })
   it.each([
     [deliver({ ...dagger, name: ' ' }), 'INVALID_CHARACTER'],
     [deliver({ ...dagger, ruleSetId: 'other' }), 'INVALID_CHARACTER'],
     [deliver({ ...dagger, hp: [0] }), 'INVALID_CHARACTER'],
     [deliver({ ...dagger, hope: 99 }), 'INVALID_CHARACTER'],
     [deliver({ ...dagger, cards: {} }), 'INVALID_CHARACTER'],
-    [JSON.stringify({ schemaVersion: 2, sheet: dagger }), 'UNSUPPORTED_SCHEMA'],
+    [JSON.stringify({ schemaVersion: 2, sheet: dagger }), 'INVALID_CHARACTER'],
+    [deliver({ ...dagger, desktopView: { version: 1 } }), 'INVALID_CHARACTER'],
+    [JSON.stringify({ schemaVersion: 3, sheet: dagger }), 'UNSUPPORTED_SCHEMA'],
     [deliver({ ...dagger, unknown: 'x'.repeat(513 * 1024) }), 'PAYLOAD_TOO_LARGE'],
     ['x'.repeat(545 * 1024), 'PAYLOAD_TOO_LARGE'],
   ])('rejects malformed delivery (%s)', (body, code) => {

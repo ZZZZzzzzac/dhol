@@ -129,7 +129,7 @@ export class RoomV2Storage {
       ...resources,
       hp: Array.from({ length: displayedResourceMax(sheet, 'hp') }, (_, index) => Boolean(resources.hp[index])),
       stress: Array.from({ length: displayedResourceMax(sheet, 'stress') }, (_, index) => Boolean(resources.stress[index])),
-      armor: resources.armor.slice(0, typeof sheet.armorMax === 'number' ? sheet.armorMax : resources.armor.length),
+      armor: resources.armor.slice(0, sheet.desktopView?.armorMax ?? (typeof sheet.armorMax === 'number' ? sheet.armorMax : resources.armor.length)),
     }
   }
 

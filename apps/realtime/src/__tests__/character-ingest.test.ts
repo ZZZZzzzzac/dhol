@@ -46,9 +46,25 @@ describe('character ingestion endpoint', () => {
     expect(await forwarded[0].json()).toEqual({ requestId: 'delivery-123', sheet: daggerheart })
   })
 
+  it('forwards the complete v2 sheet and its edited display snapshot', async () => {
+    const forwarded: Request[] = []
+    const sheet = { ...daggerheart, characterBackground: '刚编辑的背景', desktopView: {
+      version: 1, evasion: '11', armorValue: '2', minorThreshold: '17', majorThreshold: '28',
+      attributes: { agility: '+2', strength: '+1', finesse: '0', instinct: '0', presence: '0', knowledge: '0' },
+      hpMax: 7, stressMax: 7, armorMax: 3, primaryWeaponAttribute: '', primaryWeaponRange: '', secondaryWeaponAttribute: '', secondaryWeaponRange: '',
+    } }
+    const result = await routeCharacterIngest(post(JSON.stringify({ schemaVersion: 2, sheet })), envWith(async request => {
+      forwarded.push(request)
+      return Response.json({ ok: true, action: 'updated', name: '阿岚', generation: 2, seq: 2 })
+    }))
+    expect(result?.status).toBe(200)
+    expect(await forwarded[0].json()).toEqual({ requestId: 'delivery-123', sheet })
+  })
+
   it.each([
     [JSON.stringify({ schemaVersion: 1, sheet: { ...daggerheart, name: ' ' } }), 'INVALID_CHARACTER', 400],
-    [JSON.stringify({ schemaVersion: 2, sheet: daggerheart }), 'UNSUPPORTED_SCHEMA', 400],
+    [JSON.stringify({ schemaVersion: 2, sheet: daggerheart }), 'INVALID_CHARACTER', 400],
+    [JSON.stringify({ schemaVersion: 3, sheet: daggerheart }), 'UNSUPPORTED_SCHEMA', 400],
     [JSON.stringify({ schemaVersion: 1, sheet: { ...daggerheart, unknown: 'x'.repeat(513 * 1024) } }), 'PAYLOAD_TOO_LARGE', 413],
   ])('rejects invalid input without touching room storage', async (body, code, status) => {
     let mutations = 0

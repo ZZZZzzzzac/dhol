@@ -597,3 +597,10 @@
   font-size: 14px;
   line-height: 1.6;
 }
+
+.sheet-source-details { border: 1px solid var(--border-subtle); padding: 12px; }
+.sheet-source-details summary { cursor: pointer; font-weight: 800; }
+.sheet-source-details dl { max-height: 45vh; overflow: auto; margin: 12px 0 0; }
+.sheet-source-details dl div { display: grid; grid-template-columns: minmax(120px, 1fr) 2fr; gap: 12px; padding: 6px 0; border-top: 1px solid var(--border-subtle); font-size: 12px; }
+.sheet-source-details dt { color: var(--ink-muted); overflow-wrap: anywhere; }
+.sheet-source-details dd { margin: 0; white-space: pre-wrap; overflow-wrap: anywhere; }

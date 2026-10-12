@@ -28,6 +28,7 @@ const technicalKeys = new Set([
   'pageVisibility', 'includePageThreeInExport', 'notebook', 'checkedUpgrades', 'domainCardAutomation', 'rulesetAutomationVersions',
   'professionRef', 'ancestry1Ref', 'ancestry2Ref', 'communityRef', 'subclassRef', 'primaryWeaponSelection', 'secondaryWeaponSelection', 'armorSelection',
   'characterImage', 'portrait', 'avatar', 'image', 'companionImage', 'presetEquipmentCalcVersion',
+  'desktopView',
 ])
 
 const groupedKeys = new Set([
@@ -153,7 +154,26 @@ function Extras({ sheet }: { sheet: CharacterSheetJson }) {
   return <Section title="其他信息"><div className="sheet-extra-text">{entries.map(([key, value]) => <ReadableValue key={key} name={key} value={value} />)}</div></Section>
 }
 
-export default function ReadOnlyCharacterSheet({ sheet, resources }: { sheet: CharacterSheetJson; resources: CharacterResources }) {
+function sourceFields(value: unknown, path: string[] = []): Array<[string, string]> {
+  if (Array.isArray(value)) return value.flatMap((item, index) => sourceFields(item, [...path, String(index + 1)]))
+  const nested = record(value)
+  if (nested) return Object.entries(nested).flatMap(([key, item]) => sourceFields(item, [...path, label(key)]))
+  const shown = scalar(value)
+  return shown === null ? [] : [[path.join(' › '), shown]]
+}
+
+export default function ReadOnlyCharacterSheet({ sheet: originalSheet, resources }: { sheet: CharacterSheetJson; resources: CharacterResources }) {
+  const view = originalSheet.desktopView
+  const sheet = view ? {
+    ...originalSheet,
+    evasion: view.evasion,
+    armorValue: view.armorValue,
+    minorThreshold: view.minorThreshold,
+    majorThreshold: view.majorThreshold,
+    ...Object.fromEntries(Object.entries(view.attributes).map(([key, value]) => [key, { ...(record(originalSheet[key]) ?? {}), value }])),
+    primaryWeaponRange: view.primaryWeaponRange,
+    secondaryWeaponRange: view.secondaryWeaponRange,
+  } : originalSheet
   const subtitle = [scalar(sheet.profession), scalar(sheet.level) && `等级 ${scalar(sheet.level)}`].filter(Boolean).join(' · ') || '角色资料'
   return <article className="readonly-sheet">
     <header className="sheet-hero"><span className="sheet-portrait" aria-hidden="true">{[...sheet.name][0] ?? '◇'}</span><div><p>{sheet.ruleSetId === 'rhodes-island' ? 'RHODES ISLAND' : 'DAGGERHEART'}</p><h2>{sheet.name}</h2><span>{subtitle}</span></div></header>
@@ -182,5 +202,6 @@ export default function ReadOnlyCharacterSheet({ sheet, resources }: { sheet: Ch
     <AdventureNotes value={sheet.adventureNotes} />
     <Relationships value={sheet.rhodesIslandRelationshipAnswers} />
     <Extras sheet={sheet} />
+    <details className="sheet-source-details"><summary>完整角色字段（含未单独排版的字段）</summary><dl>{sourceFields(originalSheet).map(([name, value], index) => <div key={`${name}-${index}`}><dt>{name}</dt><dd>{value}</dd></div>)}</dl></details>
   </article>
 }

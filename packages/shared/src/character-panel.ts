@@ -1,8 +1,28 @@
 import type { CharacterResources, CharacterSummary, RuleSetId } from './room-v2-model'
 
+export const CHARACTER_ATTRIBUTES = ['agility', 'strength', 'finesse', 'instinct', 'presence', 'knowledge'] as const
+export type CharacterAttribute = typeof CHARACTER_ATTRIBUTES[number]
+
+/** Values rendered by the builder at send time. The original sheet remains complete. */
+export interface CharacterDesktopView {
+  version: 1
+  evasion: string
+  armorValue: string
+  minorThreshold: string
+  majorThreshold: string
+  attributes: Record<CharacterAttribute, string>
+  hpMax: number
+  stressMax: number
+  armorMax: number
+  primaryWeaponAttribute: string
+  primaryWeaponRange: string
+  secondaryWeaponAttribute: string
+  secondaryWeaponRange: string
+}
+
 /** The full export is retained, including fields unknown to this version of dhol. */
-export type CharacterSheetJson = Record<string, unknown> & { ruleSetId: RuleSetId; name: string; hope: number }
-export interface CharacterDelivery { schemaVersion: 1; sheet: CharacterSheetJson }
+export type CharacterSheetJson = Record<string, unknown> & { ruleSetId: RuleSetId; name: string; hope: number; desktopView?: CharacterDesktopView }
+export type CharacterDelivery = { schemaVersion: 1; sheet: CharacterSheetJson } | { schemaVersion: 2; sheet: CharacterSheetJson & { desktopView: CharacterDesktopView } }
 
 export function characterNameKey(name: string): string {
   const key = name.trim()
@@ -29,6 +49,8 @@ function cardIds(sheet: CharacterSheetJson): Set<string> {
 
 /** Match the character builder's displayed resource limits; its arrays can contain 18 storage slots. */
 export function displayedResourceMax(sheet: CharacterSheetJson, resource: 'hp' | 'stress'): number {
+  const sentMax = sheet.desktopView?.[`${resource}Max`]
+  if (typeof sentMax === 'number') return sentMax
   const base = sheet[`${resource}Max`]
   const cards = cardIds(sheet)
   let bonus = 0
@@ -68,28 +90,29 @@ export function resourcesFromSheet(sheet: CharacterSheetJson): CharacterResource
     hopeMax: typeof sheet.hopeMax === 'number' ? sheet.hopeMax : 6,
     hp: track(sheet.hp, displayedResourceMax(sheet, 'hp')),
     stress: track(sheet.stress, displayedResourceMax(sheet, 'stress')),
-    armor: track(sheet.armorBoxes, sheet.armorMax),
+    armor: track(sheet.armorBoxes, sheet.desktopView?.armorMax ?? sheet.armorMax),
   }
 }
 
 export function summaryFromSheet(sheet: CharacterSheetJson, resources: CharacterResources, generation: number, position: number): CharacterSummary {
+  const shownAttribute = (key: CharacterAttribute) => sheet.desktopView ? display(sheet.desktopView.attributes[key]) : attribute(sheet[key])
   return {
     name: characterNameKey(sheet.name), ruleSetId: sheet.ruleSetId, generation, position,
     resources, level: display(sheet.level), profession: display(sheet.profession),
-    evasion: display(sheet.evasion), armorValue: display(sheet.armorValue),
-    minorThreshold: display(sheet.minorThreshold), majorThreshold: display(sheet.majorThreshold),
+    evasion: display(sheet.desktopView?.evasion ?? sheet.evasion), armorValue: display(sheet.desktopView?.armorValue ?? sheet.armorValue),
+    minorThreshold: display(sheet.desktopView?.minorThreshold ?? sheet.minorThreshold), majorThreshold: display(sheet.desktopView?.majorThreshold ?? sheet.majorThreshold),
     attributes: {
-      agility: attribute(sheet.agility), strength: attribute(sheet.strength),
-      finesse: attribute(sheet.finesse), instinct: attribute(sheet.instinct),
-      presence: attribute(sheet.presence), knowledge: attribute(sheet.knowledge),
+      agility: shownAttribute('agility'), strength: shownAttribute('strength'),
+      finesse: shownAttribute('finesse'), instinct: shownAttribute('instinct'),
+      presence: shownAttribute('presence'), knowledge: shownAttribute('knowledge'),
     },
     primaryWeaponName: display(sheet.primaryWeaponName),
-    primaryWeaponTrait: display(sheet.primaryWeaponTrait),
-    primaryWeaponRange: display(sheet.primaryWeaponRange ?? sheet.primaryWeaponDistance),
+    primaryWeaponTrait: display(sheet.desktopView?.primaryWeaponAttribute ?? sheet.primaryWeaponTrait),
+    primaryWeaponRange: display(sheet.desktopView?.primaryWeaponRange ?? sheet.primaryWeaponRange ?? sheet.primaryWeaponDistance),
     primaryWeaponDamage: display(sheet.primaryWeaponDamage),
     secondaryWeaponName: display(sheet.secondaryWeaponName),
-    secondaryWeaponTrait: display(sheet.secondaryWeaponTrait),
-    secondaryWeaponRange: display(sheet.secondaryWeaponRange ?? sheet.secondaryWeaponDistance),
+    secondaryWeaponTrait: display(sheet.desktopView?.secondaryWeaponAttribute ?? sheet.secondaryWeaponTrait),
+    secondaryWeaponRange: display(sheet.desktopView?.secondaryWeaponRange ?? sheet.secondaryWeaponRange ?? sheet.secondaryWeaponDistance),
     secondaryWeaponDamage: display(sheet.secondaryWeaponDamage),
   }
 }

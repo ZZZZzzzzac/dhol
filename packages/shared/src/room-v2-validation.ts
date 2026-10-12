@@ -1,4 +1,4 @@
-import { characterNameKey, type CharacterDelivery, type CharacterSheetJson } from './character-panel'
+import { CHARACTER_ATTRIBUTES, characterNameKey, type CharacterDelivery, type CharacterDesktopView, type CharacterSheetJson } from './character-panel'
 import type { RuleSetId } from './room-v2-model'
 
 export const MAX_CHARACTER_JSON_BYTES = 512 * 1024
@@ -31,8 +31,8 @@ function boundedInteger(value: unknown, min: number, max: number, label: string)
 }
 
 export function validateCharacterDelivery(value: unknown): CharacterDelivery {
-  if (!record(value) || value.schemaVersion !== 1 || !record(value.sheet)) {
-    throw new CharacterValidationError('UNSUPPORTED_SCHEMA', '只接受 schemaVersion 1 的角色 JSON')
+  if (!record(value) || (value.schemaVersion !== 1 && value.schemaVersion !== 2) || !record(value.sheet)) {
+    throw new CharacterValidationError('UNSUPPORTED_SCHEMA', '只接受 schemaVersion 1 或 2 的角色 JSON')
   }
   const sheet = value.sheet
   if (typeof sheet.ruleSetId !== 'string' || !RULE_SETS.has(sheet.ruleSetId)) {
@@ -49,6 +49,22 @@ export function validateCharacterDelivery(value: unknown): CharacterDelivery {
   for (const [key, length] of [['hpMax', sheet.hp.length], ['stressMax', sheet.stress.length], ['armorMax', sheet.armorBoxes.length]] as const) {
     if (sheet[key] !== undefined) boundedInteger(sheet[key], key === 'armorMax' ? 0 : 1, length, key)
   }
+  if (value.schemaVersion === 1 && sheet.desktopView !== undefined) {
+    throw new CharacterValidationError('INVALID_CHARACTER', '桌面显示值需要 schemaVersion 2')
+  }
+  if (value.schemaVersion === 2) {
+    const view = sheet.desktopView
+    if (!record(view) || view.version !== 1 || !record(view.attributes)) {
+      throw new CharacterValidationError('INVALID_CHARACTER', '缺少有效的桌面显示值')
+    }
+    for (const key of ['evasion', 'armorValue', 'minorThreshold', 'majorThreshold', 'primaryWeaponAttribute', 'primaryWeaponRange', 'secondaryWeaponAttribute', 'secondaryWeaponRange']) {
+      if (typeof view[key] !== 'string') throw new CharacterValidationError('INVALID_CHARACTER', `桌面显示值 ${key} 无效`)
+    }
+    for (const key of CHARACTER_ATTRIBUTES) {
+      if (typeof view.attributes[key] !== 'string') throw new CharacterValidationError('INVALID_CHARACTER', `桌面属性 ${key} 无效`)
+    }
+    for (const key of ['hpMax', 'stressMax', 'armorMax'] as const) boundedInteger(view[key], key === 'armorMax' ? 0 : 1, MAX_TRACK_LENGTH, `桌面 ${key}`)
+  }
   if (!Array.isArray(sheet.cards) || (sheet.inventory_cards !== undefined && !Array.isArray(sheet.inventory_cards))) {
     throw new CharacterValidationError('INVALID_CHARACTER', '卡牌字段必须是数组')
   }
@@ -56,7 +72,9 @@ export function validateCharacterDelivery(value: unknown): CharacterDelivery {
   if (new TextEncoder().encode(sheetJson).byteLength > MAX_CHARACTER_JSON_BYTES) {
     throw new CharacterValidationError('PAYLOAD_TOO_LARGE', '角色 JSON 超过 512 KiB')
   }
-  return { schemaVersion: 1, sheet: sheet as CharacterSheetJson }
+  return value.schemaVersion === 2
+    ? { schemaVersion: 2, sheet: sheet as CharacterSheetJson & { desktopView: CharacterDesktopView } }
+    : { schemaVersion: 1, sheet: sheet as CharacterSheetJson }
 }
 
 /** Call at the HTTP boundary before any room mutation. */

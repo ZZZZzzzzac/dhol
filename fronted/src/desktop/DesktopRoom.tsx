@@ -105,13 +105,22 @@ export default function DesktopRoom({ session, onLeave }: { session: DesktopSess
         }
         return { sheet: result.sheet, resources: result.resources }
       }) as { sheet: CharacterSheetJson; resources: CharacterResources }
-      setDetail(current => current?.character.name === character.name ? { character, state: { status: 'ready', ...payload } } : current)
+      setDetail(current => current?.character.name === character.name && current.character.generation === character.generation ? { character, state: { status: 'ready', ...payload } } : current)
     } catch (cause) {
-      setDetail(current => current?.character.name === character.name ? { character, state: { status: 'error', message: cause instanceof Error ? cause.message : '读取角色资料失败。' } } : current)
+      setDetail(current => current?.character.name === character.name && current.character.generation === character.generation ? { character, state: { status: 'error', message: cause instanceof Error ? cause.message : '读取角色资料失败。' } } : current)
     }
   }
 
   function closeDetail() { sync.ui.setDetail(null); setDetail(null) }
+
+  useEffect(() => {
+    if (!detail || !room) return
+    const latest = room.characters.find(item => item.name === detail.character.name)
+    if (latest && latest.generation !== detail.character.generation) void openDetail(latest)
+    if (!latest) closeDetail()
+  // The replacement generation is the only reason to reload the open sheet.
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [room?.characters, detail?.character.generation, detail?.character.name])
 
   function mark(character: CharacterSummary, resource: TrackResource, index: number, marked: boolean) {
     submit({ type: 'character.setMark', name: character.name, generation: character.generation, resource, index, marked })
