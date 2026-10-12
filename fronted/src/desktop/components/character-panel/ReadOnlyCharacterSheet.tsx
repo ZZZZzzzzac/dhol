@@ -263,7 +263,6 @@ function GoldInteractive({ initialGold }: { initialGold?: unknown }) {
         </div>
         <span className="sheet-gold-count">{chest ? 1 : 0} / 1</span>
       </div>
-      <p className="sheet-gold-tip">※ 点击格子可自由增减标记并同步当前数据</p>
     </div>
   )
 }
@@ -378,7 +377,7 @@ export default function ReadOnlyCharacterSheet({ sheet: originalSheet, resources
           <div className="sheet-block__body">
             <div className="sheet-prof-container">
               <div className="sheet-prof-row">
-                <span className="sheet-prof-title">熟练值等级槽</span>
+                <span className="sheet-prof-title">熟练值</span>
                 <div className="sheet-prof-slots">
                   {[1, 2, 3, 4, 5, 6].map((lvl, idx) => {
                     const active = profArray[idx] ?? (typeof sheet.proficiency === 'number' && sheet.proficiency >= lvl)
@@ -393,8 +392,8 @@ export default function ReadOnlyCharacterSheet({ sheet: originalSheet, resources
               <table className="sheet-exp-table">
                 <thead>
                   <tr>
-                    <th>经历项目</th>
-                    <th style={{ textAlign: 'right' }}>修正值</th>
+                    <th>经历</th>
+                    <th style={{ textAlign: 'right' }}>加值</th>
                   </tr>
                 </thead>
                 <tbody>
