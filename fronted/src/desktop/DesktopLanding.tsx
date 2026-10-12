@@ -71,6 +71,9 @@ export default function DesktopLanding({ onEnter }: { onEnter: (session: Desktop
         {/* 顶部标题栏 */}
         <header className="landing-window__head">
           <h1>匕首之心在线面板</h1>
+          <p className="landing-window__notice">
+            玩家请从SRD车卡器<a href="https://dhsheet.top" target="_blank" rel="noreferrer">dhsheet.top</a>直接发送角色卡至房间，无需文件导入
+          </p>
         </header>
 
         <div className="landing-window__body">

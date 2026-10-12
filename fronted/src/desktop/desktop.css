@@ -804,6 +804,21 @@ input, select, textarea {
   background: var(--ink);
 }
 
+.landing-window__notice {
+  margin: 0 0 0 24px;
+  color: var(--ink-secondary);
+  font-size: 11px;
+  font-weight: 700;
+  line-height: 1.45;
+  text-align: right;
+}
+
+.landing-window__notice a {
+  color: var(--blue);
+  text-decoration: underline;
+  text-underline-offset: 2px;
+}
+
 .landing-window__body {
   padding: 24px;
   display: flex;
@@ -853,6 +868,15 @@ input, select, textarea {
 }
 
 @media (max-width: 768px) {
+  .landing-window__head {
+    align-items: flex-start;
+    flex-direction: column;
+    gap: 8px;
+  }
+  .landing-window__notice {
+    margin-left: 18px;
+    text-align: left;
+  }
   .landing-grid {
     grid-template-columns: 1fr;
   }
