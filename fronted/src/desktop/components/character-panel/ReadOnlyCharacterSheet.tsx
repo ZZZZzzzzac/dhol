@@ -1,7 +1,272 @@
-import type { ReactNode } from 'react'
+import { useState, type ReactNode } from 'react'
 import type { CharacterResources, CharacterSheetJson } from '@dhgc/shared/desktop'
 
 type SheetRecord = Record<string, unknown>
+
+function record(value: unknown): SheetRecord | null {
+  return value && typeof value === 'object' && !Array.isArray(value) ? value as SheetRecord : null
+}
+
+function scalar(value: unknown): string | null {
+  if (typeof value === 'string') {
+    const cleaned = value.trim()
+    if (!cleaned || /^data:image\//i.test(cleaned)) return null
+    return cleaned
+  }
+  if (typeof value === 'number' && Number.isFinite(value)) return String(value)
+  if (typeof value === 'boolean') return value ? '是' : '否'
+  return null
+}
+
+function list(value: unknown): string[] {
+  return Array.isArray(value) ? value.map(scalar).filter((item): item is string => item !== null) : []
+}
+
+// ===== SAFE INLINE MARKDOWN PARSER =====
+function renderInlineMarkdown(text: string): ReactNode[] {
+  const parts: ReactNode[] = []
+  const regex = /(\*\*\*([^*]+)\*\*\*|\*\*([^*]+)\*\*|\*([^*]+)\*)/g
+  let lastIndex = 0
+  let match: RegExpExecArray | null
+  let key = 0
+
+  while ((match = regex.exec(text)) !== null) {
+    if (match.index > lastIndex) {
+      parts.push(text.slice(lastIndex, match.index))
+    }
+    if (match[2]) {
+      parts.push(<strong key={key++}><em>{match[2]}</em></strong>)
+    } else if (match[3]) {
+      parts.push(<strong key={key++}>{match[3]}</strong>)
+    } else if (match[4]) {
+      parts.push(<em key={key++}>{match[4]}</em>)
+    }
+    lastIndex = regex.lastIndex
+  }
+  if (lastIndex < text.length) {
+    parts.push(text.slice(lastIndex))
+  }
+  return parts
+}
+
+export function MarkdownContent({ content }: { content: string }) {
+  if (!content) return null
+  const blocks = content.trim().split(/\n\s*\n/)
+  return (
+    <div className="sheet-md-content">
+      {blocks.map((block, bIdx) => {
+        const lines = block.split('\n').map(l => l.trim()).filter(Boolean)
+        const isList = lines.length > 0 && lines.every(l => l.startsWith('- ') || l.startsWith('* '))
+        if (isList) {
+          return (
+            <ul key={bIdx}>
+              {lines.map((l, lIdx) => (
+                <li key={lIdx}>{renderInlineMarkdown(l.replace(/^[-*]\s+/, ''))}</li>
+              ))}
+            </ul>
+          )
+        }
+        return (
+          <p key={bIdx}>
+            {lines.map((l, lIdx) => (
+              <span key={lIdx}>
+                {lIdx > 0 && <br />}
+                {renderInlineMarkdown(l)}
+              </span>
+            ))}
+          </p>
+        )
+      })}
+    </div>
+  )
+}
+
+// ===== CARD TYPE CONFIG =====
+const TYPE_CONFIG: Record<string, { label: string; cls: string }> = {
+  profession: { label: '职业', cls: 'sheet-card-chip--profession' },
+  subclass:   { label: '子职', cls: 'sheet-card-chip--subclass' },
+  ancestry:   { label: '种族', cls: 'sheet-card-chip--ancestry' },
+  community:  { label: '社群', cls: 'sheet-card-chip--community' },
+  domain:     { label: '领域能力', cls: 'sheet-card-chip--domain' },
+  variant:    { label: '野兽形态', cls: 'sheet-card-chip--variant' },
+}
+
+// ===== WEAPON / ARMOR CARDS =====
+function WeaponCard({ slot, name, trait, damage, feature }: { slot: string; name?: unknown; trait?: unknown; damage?: unknown; feature?: unknown }) {
+  const weaponName = scalar(name)
+  if (!weaponName) {
+    return (
+      <article className="sheet-weapon-card sheet-weapon-card--empty">
+        <header className="sheet-weapon-card__bar">
+          <span className="sheet-weapon-card__name">未装备</span>
+          <span className="sheet-weapon-card__slot">{slot}</span>
+        </header>
+        <div className="sheet-weapon-card__content">
+          <span>— 无{slot}配置 —</span>
+        </div>
+      </article>
+    )
+  }
+
+  const traitStr = scalar(trait)
+  const damageStr = scalar(damage)
+  const featureStr = scalar(feature)
+
+  return (
+    <article className="sheet-weapon-card">
+      <header className="sheet-weapon-card__bar">
+        <span className="sheet-weapon-card__name">{weaponName}</span>
+        <span className="sheet-weapon-card__slot">{slot}</span>
+      </header>
+      <div className="sheet-weapon-card__content">
+        {traitStr && (
+          <div className="sheet-weapon-meta-row">
+            <span className="sheet-weapon-meta-key">属性特征</span>
+            <span className="sheet-weapon-meta-val">{traitStr}</span>
+          </div>
+        )}
+        {damageStr && (
+          <div className="sheet-weapon-meta-row">
+            <span className="sheet-weapon-meta-key">伤害值</span>
+            <span className="sheet-weapon-meta-val sheet-weapon-meta-val--damage">{damageStr}</span>
+          </div>
+        )}
+        {featureStr && (
+          <div className="sheet-weapon-feature-box">
+            <MarkdownContent content={featureStr} />
+          </div>
+        )}
+      </div>
+    </article>
+  )
+}
+
+function ArmorCard({ name, baseScore, threshold, feature }: { name?: unknown; baseScore?: unknown; threshold?: unknown; feature?: unknown }) {
+  const armorName = scalar(name)
+  if (!armorName) {
+    return (
+      <article className="sheet-weapon-card sheet-weapon-card--empty">
+        <header className="sheet-weapon-card__bar">
+          <span className="sheet-weapon-card__name">未装备</span>
+          <span className="sheet-weapon-card__slot">护甲</span>
+        </header>
+        <div className="sheet-weapon-card__content">
+          <span>— 未装备身体防具 —</span>
+        </div>
+      </article>
+    )
+  }
+
+  const baseStr = scalar(baseScore)
+  const threshStr = scalar(threshold)
+  const featureStr = scalar(feature)
+
+  return (
+    <article className="sheet-weapon-card">
+      <header className="sheet-weapon-card__bar">
+        <span className="sheet-weapon-card__name">{armorName}</span>
+        <span className="sheet-weapon-card__slot">护甲</span>
+      </header>
+      <div className="sheet-weapon-card__content">
+        {baseStr && (
+          <div className="sheet-weapon-meta-row">
+            <span className="sheet-weapon-meta-key">护甲基础值</span>
+            <span className="sheet-weapon-meta-val">{baseStr}</span>
+          </div>
+        )}
+        {threshStr && (
+          <div className="sheet-weapon-meta-row">
+            <span className="sheet-weapon-meta-key">伤害阈值</span>
+            <span className="sheet-weapon-meta-val sheet-weapon-meta-val--damage">{threshStr}</span>
+          </div>
+        )}
+        {featureStr ? (
+          <div className="sheet-weapon-feature-box">
+            <MarkdownContent content={featureStr} />
+          </div>
+        ) : (
+          <div className="sheet-weapon-feature-box sheet-muted-text">无特殊护甲特性</div>
+        )}
+      </div>
+    </article>
+  )
+}
+
+// ===== GOLD CONTROLLER (Vehicle Sheet 3 Tiers) =====
+function GoldInteractive({ initialGold }: { initialGold?: unknown }) {
+  const [gold, setGold] = useState<boolean[]>(() => {
+    const arr = Array(20).fill(false)
+    if (Array.isArray(initialGold)) {
+      initialGold.slice(0, 20).forEach((v, i) => { arr[i] = Boolean(v) })
+    }
+    return arr
+  })
+  const [chest, setChest] = useState(false)
+
+  const toggle = (index: number) => {
+    setGold(prev => {
+      const next = [...prev]
+      next[index] = !next[index]
+      return next
+    })
+  }
+
+  const handfulChecked = gold.slice(0, 10).filter(Boolean).length
+  const bagChecked = gold.slice(10, 20).filter(Boolean).length
+
+  return (
+    <div className="sheet-gold-container">
+      {/* 把 (10个圆孔) */}
+      <div className="sheet-gold-row">
+        <span className="sheet-gold-tier-badge">把</span>
+        <div className="sheet-gold-grid">
+          {gold.slice(0, 10).map((checked, i) => (
+            <button
+              type="button"
+              key={`handful-${i}`}
+              className={`sheet-gold-chk ${checked ? 'checked' : ''}`}
+              onClick={() => toggle(i)}
+              aria-label={`金币（把）${i + 1}`}
+            />
+          ))}
+        </div>
+        <span className="sheet-gold-count">{handfulChecked} / 10</span>
+      </div>
+
+      {/* 袋 (10个方孔) */}
+      <div className="sheet-gold-row">
+        <span className="sheet-gold-tier-badge sheet-gold-tier-badge--bag">袋</span>
+        <div className="sheet-gold-grid">
+          {gold.slice(10, 20).map((checked, i) => (
+            <button
+              type="button"
+              key={`bag-${i}`}
+              className={`sheet-gold-chk sheet-gold-chk--bag ${checked ? 'checked' : ''}`}
+              onClick={() => toggle(10 + i)}
+              aria-label={`金币（袋）${i + 1}`}
+            />
+          ))}
+        </div>
+        <span className="sheet-gold-count">{bagChecked} / 10</span>
+      </div>
+
+      {/* 箱 (1个大宝箱孔) */}
+      <div className="sheet-gold-row">
+        <span className="sheet-gold-tier-badge sheet-gold-tier-badge--chest">箱</span>
+        <div className="sheet-gold-grid">
+          <button
+            type="button"
+            className={`sheet-gold-chk sheet-gold-chk--chest ${chest ? 'checked' : ''}`}
+            onClick={() => setChest(v => !v)}
+            aria-label="金币（箱）"
+          />
+        </div>
+        <span className="sheet-gold-count">{chest ? 1 : 0} / 1</span>
+      </div>
+      <p className="sheet-gold-tip">※ 点击格子可自由增减标记并同步当前数据</p>
+    </div>
+  )
+}
 
 const labels: Record<string, string> = {
   level: '等级', profession: '职业', community: '社群', subclass: '分支',
@@ -22,138 +287,11 @@ const labels: Record<string, string> = {
   name: '名称', title: '名称', type: '类型', description: '描述', text: '正文', effect: '效果', feature: '特性', cost: '花费', domain: '领域', rarity: '稀有度',
 }
 
-const technicalKeys = new Set([
-  'name', 'ruleSetId', 'hope', 'hopeMax', 'hp', 'hpMax', 'stress', 'stressMax', 'armorBoxes', 'armorMax',
-  'cards', 'inventory_cards', 'adventureNotes', 'rhodesIslandRelationshipAnswers', 'trainingOptions', 'armorTemplate',
-  'pageVisibility', 'includePageThreeInExport', 'notebook', 'checkedUpgrades', 'domainCardAutomation', 'rulesetAutomationVersions',
-  'professionRef', 'ancestry1Ref', 'ancestry2Ref', 'communityRef', 'subclassRef', 'primaryWeaponSelection', 'secondaryWeaponSelection', 'armorSelection',
-  'characterImage', 'portrait', 'avatar', 'image', 'companionImage', 'presetEquipmentCalcVersion',
-  'desktopView',
-])
-
-const groupedKeys = new Set([
-  'level', 'profession', 'community', 'subclass', 'ancestry1', 'ancestry2', 'proficiency',
-  'evasion', 'armorValue', 'armorName', 'armorBaseScore', 'armorThreshold', 'armorFeature', 'armorBonus', 'minorThreshold', 'majorThreshold',
-  'agility', 'strength', 'finesse', 'instinct', 'presence', 'knowledge',
-  'primaryWeaponName', 'primaryWeaponTrait', 'primaryWeaponRange', 'primaryWeaponDistance', 'primaryWeaponDamage', 'primaryWeaponFeature',
-  'secondaryWeaponName', 'secondaryWeaponTrait', 'secondaryWeaponRange', 'secondaryWeaponDistance', 'secondaryWeaponDamage', 'secondaryWeaponFeature',
-  'inventoryWeapon1Name', 'inventoryWeapon1Trait', 'inventoryWeapon1Damage', 'inventoryWeapon1Feature',
-  'inventoryWeapon2Name', 'inventoryWeapon2Trait', 'inventoryWeapon2Damage', 'inventoryWeapon2Feature',
-  'experience', 'experienceValues', 'ancestryExperience', 'ancestryExperienceValues', 'inventory',
-  'characterBackground', 'characterAppearance', 'characterMotivation',
-  'companionName', 'companionDescription', 'companionWeapon', 'companionRange', 'companionEvasion', 'companionExperience', 'companionExperienceValue', 'companionStress', 'companionStressMax',
-])
-
-function record(value: unknown): SheetRecord | null {
-  return value && typeof value === 'object' && !Array.isArray(value) ? value as SheetRecord : null
-}
-
 function label(key: string): string {
-  return labels[key] ?? key.replace(/([a-z0-9])([A-Z])/g, '$1 $2').replace(/[_-]+/g, ' ')
+  return labels[key] ?? key
 }
 
-function scalar(value: unknown): string | null {
-  if (typeof value === 'string') {
-    const cleaned = value.trim()
-    if (!cleaned || /^data:image\//i.test(cleaned)) return null
-    return cleaned
-  }
-  if (typeof value === 'number' && Number.isFinite(value)) return String(value)
-  if (typeof value === 'boolean') return value ? '是' : '否'
-  return null
-}
-
-function attribute(value: unknown): string | null {
-  const item = record(value)
-  return scalar(item?.value ?? value)
-}
-
-function list(value: unknown): string[] {
-  return Array.isArray(value) ? value.map(scalar).filter((item): item is string => item !== null) : []
-}
-
-function Fields({ entries, className = '' }: { entries: Array<[string, unknown]>; className?: string }) {
-  const visible = entries.map(([key, value]) => [key, attribute(value)] as const).filter((entry): entry is readonly [string, string] => entry[1] !== null)
-  if (!visible.length) return null
-  return <dl className={`sheet-text-grid ${className}`.trim()}>{visible.map(([key, value]) => <div key={key}><dt>{label(key)}</dt><dd>{value}</dd></div>)}</dl>
-}
-
-function Section({ title, eyebrow, children }: { title: string; eyebrow?: string; children: ReactNode }) {
-  return <section className="sheet-section"><header className="sheet-section__heading">{eyebrow && <span>{eyebrow}</span>}<h3>{title}</h3></header>{children}</section>
-}
-
-function TextBlock({ label: heading, value }: { label: string; value: unknown }) {
-  const content = scalar(value)
-  if (!content) return null
-  return <article className="sheet-text-block"><h4>{heading}</h4><p>{content}</p></article>
-}
-
-function NamedList({ title, values, scores }: { title: string; values: unknown; scores?: unknown }) {
-  const names = list(values)
-  const modifiers = list(scores)
-  if (!names.length) return null
-  return <Section title={title}><div className="sheet-line-list">{names.map((name, index) => <p key={`${name}-${index}`}><strong>{name}</strong>{modifiers[index] && <span>{modifiers[index]}</span>}</p>)}</div></Section>
-}
-
-function Cards({ title, value }: { title: string; value: unknown }) {
-  if (!Array.isArray(value)) return null
-  const cards = value.map(record).filter((item): item is SheetRecord => item !== null && Object.values(item).some(scalar))
-  if (!cards.length) return null
-  return <Section title={title} eyebrow="CARDS"><div className="sheet-card-list">{cards.map((card, index) => {
-    const heading = scalar(card.name ?? card.title) ?? `条目 ${index + 1}`
-    const body = scalar(card.description ?? card.text ?? card.effect)
-    const metadata = Object.entries(card).filter(([key, item]) => !['id', 'name', 'title', 'description', 'text', 'effect', 'image', 'imageUrl', 'art', 'artwork'].includes(key) && scalar(item) !== null)
-    return <article className="sheet-domain-card" key={String(card.id ?? `${heading}-${index}`)}><div><p className="sheet-kicker">{[scalar(card.type), scalar(card.domain), scalar(card.level) && `等级 ${scalar(card.level)}`].filter(Boolean).join(' · ') || '角色卡牌'}</p><h4>{heading}</h4>{body && <p>{body}</p>}<Fields entries={metadata} className="sheet-text-grid--compact" /></div></article>
-  })}</div></Section>
-}
-
-function Companion({ sheet }: { sheet: CharacterSheetJson }) {
-  const hasCompanion = ['companionName', 'companionDescription', 'companionWeapon', 'companionRange', 'companionEvasion'].some(key => scalar(sheet[key])) || list(sheet.companionExperience).length > 0
-  if (!hasCompanion) return null
-  return <Section title="游侠伙伴" eyebrow="COMPANION"><Fields entries={[
-    ['companionName', sheet.companionName], ['companionEvasion', sheet.companionEvasion], ['companionWeapon', sheet.companionWeapon], ['companionRange', sheet.companionRange],
-  ]} /><TextBlock label="伙伴描述" value={sheet.companionDescription} /><NamedList title="伙伴经历" values={sheet.companionExperience} scores={sheet.companionExperienceValue} /></Section>
-}
-
-function AdventureNotes({ value }: { value: unknown }) {
-  const notes = record(value)
-  if (!notes) return null
-  const profile = record(notes.characterProfile)
-  const player = record(notes.playerInfo)
-  const logs = Array.isArray(notes.adventureLog) ? notes.adventureLog.map(record).filter((item): item is SheetRecord => item !== null) : []
-  if (!profile && !player && !scalar(notes.backstory) && !scalar(notes.milestones) && !logs.length) return null
-  return <Section title="冒险笔记" eyebrow="ADVENTURE NOTES"><div className="sheet-note-columns"><div>{profile && <><h4>角色简介</h4><Fields entries={Object.entries(profile)} /></>}{player && <><h4>玩家信息</h4><Fields entries={Object.entries(player)} /></>}</div><div><TextBlock label="背景故事" value={notes.backstory} /><TextBlock label="大事记" value={notes.milestones} /></div></div>{logs.length > 0 && <div className="sheet-log"><h4>冒险履历</h4>{logs.map((entry, index) => <Fields key={index} entries={Object.entries(entry)} />)}</div>}</Section>
-}
-
-function Relationships({ value }: { value: unknown }) {
-  const groups = record(value)
-  if (!groups) return null
-  const answers = Object.entries(groups).flatMap(([profession, raw]) => {
-    const group = record(raw)
-    if (!group) return []
-    return ['backgroundQuestions', 'relationships'].flatMap(key => list(group[key]).map((answer, index) => ({ profession, key, answer, index })))
-  })
-  if (!answers.length) return null
-  return <Section title="关系与问题" eyebrow="RELATIONSHIPS"><div className="sheet-answer-list">{answers.map(item => <article key={`${item.profession}-${item.key}-${item.index}`}><span>{label(item.key)} {item.index + 1}</span><p>{item.answer}</p></article>)}</div></Section>
-}
-
-function ReadableValue({ name, value }: { name: string; value: unknown }) {
-  const plain = scalar(value)
-  if (plain) return <TextBlock label={label(name)} value={plain} />
-  const values = list(value)
-  if (values.length) return <article className="sheet-text-block"><h4>{label(name)}</h4>{values.map((item, index) => <p key={index}>{item}</p>)}</article>
-  const item = record(value)
-  if (!item) return null
-  const entries = Object.entries(item).filter(([key, nested]) => !/image|ref|version|selection/i.test(key) && scalar(nested) !== null)
-  return entries.length ? <article className="sheet-text-block"><h4>{label(name)}</h4><Fields entries={entries} /></article> : null
-}
-
-function Extras({ sheet }: { sheet: CharacterSheetJson }) {
-  const entries = Object.entries(sheet).filter(([key, value]) => !technicalKeys.has(key) && !groupedKeys.has(key) && !/image|ref|version|selection|modifier/i.test(key) && (scalar(value) !== null || list(value).length > 0 || record(value)))
-  if (!entries.length) return null
-  return <Section title="其他信息"><div className="sheet-extra-text">{entries.map(([key, value]) => <ReadableValue key={key} name={key} value={value} />)}</div></Section>
-}
-
+// ===== SOURCE DETAILS FALLBACK =====
 function sourceFields(value: unknown, path: string[] = []): Array<[string, string]> {
   if (Array.isArray(value)) return value.flatMap((item, index) => sourceFields(item, [...path, String(index + 1)]))
   const nested = record(value)
@@ -162,7 +300,8 @@ function sourceFields(value: unknown, path: string[] = []): Array<[string, strin
   return shown === null ? [] : [[path.join(' › '), shown]]
 }
 
-export default function ReadOnlyCharacterSheet({ sheet: originalSheet, resources }: { sheet: CharacterSheetJson; resources: CharacterResources }) {
+// ===== MAIN COMPONENT =====
+export default function ReadOnlyCharacterSheet({ sheet: originalSheet, resources: _resources }: { sheet: CharacterSheetJson; resources: CharacterResources }) {
   const view = originalSheet.desktopView
   const sheet = view ? {
     ...originalSheet,
@@ -170,38 +309,300 @@ export default function ReadOnlyCharacterSheet({ sheet: originalSheet, resources
     armorValue: view.armorValue,
     minorThreshold: view.minorThreshold,
     majorThreshold: view.majorThreshold,
-    ...Object.fromEntries(Object.entries(view.attributes).map(([key, value]) => [key, { ...(record(originalSheet[key]) ?? {}), value }])),
+    ...Object.fromEntries(Object.entries(view.attributes ?? {}).map(([key, value]) => [key, { ...(record(originalSheet[key]) ?? {}), value }])),
     primaryWeaponRange: view.primaryWeaponRange,
     secondaryWeaponRange: view.secondaryWeaponRange,
   } : originalSheet
-  const subtitle = [scalar(sheet.profession), scalar(sheet.level) && `等级 ${scalar(sheet.level)}`].filter(Boolean).join(' · ') || '角色资料'
-  return <article className="readonly-sheet">
-    <header className="sheet-hero"><span className="sheet-portrait" aria-hidden="true">{[...sheet.name][0] ?? '◇'}</span><div><p>{sheet.ruleSetId === 'rhodes-island' ? 'RHODES ISLAND' : 'DAGGERHEART'}</p><h2>{sheet.name}</h2><span>{subtitle}</span></div></header>
-    <section className="sheet-resource-strip" aria-label="当前资源"><span>希望 <b>{resources.hope}/{resources.hopeMax}</b></span><span>生命已标记 <b>{resources.hp.filter(Boolean).length}/{resources.hp.length}</b></span><span>压力已标记 <b>{resources.stress.filter(Boolean).length}/{resources.stress.length}</b></span><span>护甲槽已标记 <b>{resources.armor.filter(Boolean).length}/{resources.armor.length}</b></span></section>
-    <Section title="角色资料" eyebrow="CHARACTER"><Fields entries={[
-      ['level', sheet.level], ['profession', sheet.profession], ['subclass', sheet.subclass], ['community', sheet.community], ['ancestry1', sheet.ancestry1], ['ancestry2', sheet.ancestry2], ['proficiency', Array.isArray(sheet.proficiency) ? sheet.proficiency.filter(Boolean).length : sheet.proficiency],
-    ]} /></Section>
-    <Section title="属性与战斗" eyebrow="CORE STATS"><Fields entries={[
-      ['evasion', sheet.evasion], ['armorValue', sheet.armorValue], ['minorThreshold', sheet.minorThreshold], ['majorThreshold', sheet.majorThreshold],
-      ['agility', sheet.agility], ['strength', sheet.strength], ['finesse', sheet.finesse], ['instinct', sheet.instinct], ['presence', sheet.presence], ['knowledge', sheet.knowledge],
-    ]} /></Section>
-    <Section title="武器与护甲" eyebrow="EQUIPMENT"><Fields entries={[
-      ['primaryWeaponName', sheet.primaryWeaponName], ['primaryWeaponTrait', sheet.primaryWeaponTrait], ['primaryWeaponRange', sheet.primaryWeaponRange ?? sheet.primaryWeaponDistance], ['primaryWeaponDamage', sheet.primaryWeaponDamage], ['primaryWeaponFeature', sheet.primaryWeaponFeature],
-      ['secondaryWeaponName', sheet.secondaryWeaponName], ['secondaryWeaponTrait', sheet.secondaryWeaponTrait], ['secondaryWeaponRange', sheet.secondaryWeaponRange ?? sheet.secondaryWeaponDistance], ['secondaryWeaponDamage', sheet.secondaryWeaponDamage], ['secondaryWeaponFeature', sheet.secondaryWeaponFeature],
-      ['armorName', sheet.armorName], ['armorBaseScore', sheet.armorBaseScore], ['armorThreshold', sheet.armorThreshold], ['armorFeature', sheet.armorFeature],
-      ['inventoryWeapon1Name', sheet.inventoryWeapon1Name], ['inventoryWeapon1Trait', sheet.inventoryWeapon1Trait], ['inventoryWeapon1Damage', sheet.inventoryWeapon1Damage], ['inventoryWeapon1Feature', sheet.inventoryWeapon1Feature],
-      ['inventoryWeapon2Name', sheet.inventoryWeapon2Name], ['inventoryWeapon2Trait', sheet.inventoryWeapon2Trait], ['inventoryWeapon2Damage', sheet.inventoryWeapon2Damage], ['inventoryWeapon2Feature', sheet.inventoryWeapon2Feature],
-    ]} /></Section>
-    <NamedList title="经历" values={sheet.experience} scores={sheet.experienceValues} />
-    <NamedList title="种族经历" values={sheet.ancestryExperience} scores={sheet.ancestryExperienceValues} />
-    <section className="sheet-narrative"><TextBlock label="背景" value={sheet.characterBackground} /><TextBlock label="外貌" value={sheet.characterAppearance} /><TextBlock label="动机" value={sheet.characterMotivation} /></section>
-    <NamedList title="物品栏" values={sheet.inventory} />
-    <Cards title="配置卡组" value={sheet.cards} />
-    <Cards title="宝库卡组" value={sheet.inventory_cards} />
-    <Companion sheet={sheet} />
-    <AdventureNotes value={sheet.adventureNotes} />
-    <Relationships value={sheet.rhodesIslandRelationshipAnswers} />
-    <Extras sheet={sheet} />
-    <details className="sheet-source-details"><summary>完整角色字段（含未单独排版的字段）</summary><dl>{sourceFields(originalSheet).map(([name, value], index) => <div key={`${name}-${index}`}><dt>{name}</dt><dd>{value}</dd></div>)}</dl></details>
-  </article>
+  // 1. Tags
+  const professionName = scalar(sheet.professionRef && typeof sheet.professionRef === 'object' && 'name' in sheet.professionRef ? sheet.professionRef.name : sheet.profession)
+  const subclassName = scalar(sheet.subclassRef && typeof sheet.subclassRef === 'object' && 'name' in sheet.subclassRef ? sheet.subclassRef.name : sheet.subclass)
+  const ancestry1 = scalar(sheet.ancestry1Ref && typeof sheet.ancestry1Ref === 'object' && 'name' in sheet.ancestry1Ref ? sheet.ancestry1Ref.name : sheet.ancestry1)
+  const community = scalar(sheet.communityRef && typeof sheet.communityRef === 'object' && 'name' in sheet.communityRef ? sheet.communityRef.name : sheet.community)
+  const levelNum = scalar(sheet.level) ?? '1'
+
+  // 2. Proficiency & Experience
+  const profArray: boolean[] = Array.isArray(sheet.proficiency) ? sheet.proficiency.map(Boolean) : []
+  const experiences = list(sheet.experience)
+  const expValues = list(sheet.experienceValues)
+
+  // 3. Hope Feature Extraction
+  let hopeContent: string | null = null
+  if (Array.isArray(sheet.cards)) {
+    const profCard = sheet.cards.find(c => c && typeof c === 'object' && 'type' in c && c.type === 'profession') as SheetRecord | undefined
+    if (profCard) {
+      const special = record(profCard.professionSpecial)
+      if (special && special['希望特性']) {
+        hopeContent = scalar(special['希望特性'])
+      }
+    }
+  }
+
+  // 4. Cards
+  const filterValidCards = (raw: unknown) => {
+    if (!Array.isArray(raw)) return []
+    return raw.map(record).filter((c): c is SheetRecord => {
+      if (!c) return false
+      const id = String(c.id ?? '')
+      const name = scalar(c.name)
+      return !id.startsWith('empty-') && Boolean(name)
+    })
+  }
+
+  const activeCards = filterValidCards(sheet.cards)
+  const vaultCards = filterValidCards(sheet.inventory_cards)
+
+  // 5. Inventory Items
+  const inventoryItems = list(sheet.inventory).filter(Boolean)
+
+  return (
+    <article className="sheet-swiss-root">
+      {/* 头部身份区 */}
+      <section className="sheet-hero-box">
+        <h2 className="sheet-hero-name">{sheet.name}</h2>
+        <div className="sheet-hero-tags">
+          {professionName && <span className="sheet-tag">{professionName}</span>}
+          {subclassName && <span className="sheet-tag">{subclassName}</span>}
+          {ancestry1 && <span className="sheet-tag">{ancestry1}</span>}
+          {community && <span className="sheet-tag">{community}</span>}
+          <span className="sheet-tag sheet-tag--level">{levelNum} 级</span>
+        </div>
+      </section>
+
+      {/* 熟练度与金币 (双列) */}
+      <div className="sheet-grid-2">
+        {/* 熟练度与经历 */}
+        <section className="sheet-block">
+          <header className="sheet-block__head">
+            <h3 className="sheet-block__title">熟练度与经历</h3>
+          </header>
+          <div className="sheet-block__body">
+            <div className="sheet-prof-container">
+              <div className="sheet-prof-row">
+                <span className="sheet-prof-title">熟练值等级槽</span>
+                <div className="sheet-prof-slots">
+                  {[1, 2, 3, 4, 5, 6].map((lvl, idx) => {
+                    const active = profArray[idx] ?? (typeof sheet.proficiency === 'number' && sheet.proficiency >= lvl)
+                    return (
+                      <div key={lvl} className={`sheet-prof-slot ${active ? 'active' : ''}`}>
+                        {lvl}
+                      </div>
+                    )
+                  })}
+                </div>
+              </div>
+              <table className="sheet-exp-table">
+                <thead>
+                  <tr>
+                    <th>经历项目</th>
+                    <th style={{ textAlign: 'right' }}>修正值</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {experiences.length > 0 ? (
+                    experiences.map((exp, i) => (
+                      <tr key={i}>
+                        <td className="sheet-exp-name">{exp}</td>
+                        <td className="sheet-exp-val">{expValues[i] ? `+${expValues[i]}` : '+0'}</td>
+                      </tr>
+                    ))
+                  ) : (
+                    <tr>
+                      <td colSpan={2} className="sheet-muted-text">无登记经历</td>
+                    </tr>
+                  )}
+                </tbody>
+              </table>
+            </div>
+          </div>
+        </section>
+
+        {/* 金币存量 */}
+        <section className="sheet-block">
+          <header className="sheet-block__head">
+            <h3 className="sheet-block__title">金币存量</h3>
+          </header>
+          <div className="sheet-block__body">
+            <GoldInteractive initialGold={sheet.gold} />
+          </div>
+        </section>
+      </div>
+
+      {/* 武器与护甲配置 */}
+      <section className="sheet-block">
+        <header className="sheet-block__head">
+          <h3 className="sheet-block__title">武器与护甲配置</h3>
+        </header>
+        <div className="sheet-block__body">
+          <div className="sheet-weapons-grid">
+            <WeaponCard slot="主手" name={sheet.primaryWeaponName} trait={sheet.primaryWeaponTrait} damage={sheet.primaryWeaponDamage} feature={sheet.primaryWeaponFeature} />
+            <WeaponCard slot="副手" name={sheet.secondaryWeaponName} trait={sheet.secondaryWeaponTrait} damage={sheet.secondaryWeaponDamage} feature={sheet.secondaryWeaponFeature} />
+            <ArmorCard name={sheet.armorName} baseScore={sheet.armorBaseScore} threshold={sheet.armorThreshold} feature={sheet.armorFeature} />
+          </div>
+
+          {Boolean(scalar(sheet.inventoryWeapon1Name) || scalar(sheet.inventoryWeapon2Name)) && (
+            <div className="sheet-backup-wrapper">
+              <h4 className="sheet-backup-heading">备用武器栏位</h4>
+              <div className="sheet-backup-grid">
+                {scalar(sheet.inventoryWeapon1Name) && (
+                  <WeaponCard slot="备用 1" name={sheet.inventoryWeapon1Name} trait={sheet.inventoryWeapon1Trait} damage={sheet.inventoryWeapon1Damage} feature={sheet.inventoryWeapon1Feature} />
+                )}
+                {scalar(sheet.inventoryWeapon2Name) && (
+                  <WeaponCard slot="备用 2" name={sheet.inventoryWeapon2Name} trait={sheet.inventoryWeapon2Trait} damage={sheet.inventoryWeapon2Damage} feature={sheet.inventoryWeapon2Feature} />
+                )}
+              </div>
+            </div>
+          )}
+        </div>
+      </section>
+
+      {/* 库存物品栏 */}
+      <section className="sheet-block">
+        <header className="sheet-block__head">
+          <h3 className="sheet-block__title">库存物品栏</h3>
+        </header>
+        <div className="sheet-block__body">
+          {inventoryItems.length > 0 ? (
+            <div className="sheet-inv-grid">
+              {inventoryItems.map((item, idx) => (
+                <div key={idx} className="sheet-inv-item">
+                  <span className="sheet-inv-num">{String(idx + 1).padStart(2, '0')}</span>
+                  <span className="sheet-inv-text">{item}</span>
+                </div>
+              ))}
+            </div>
+          ) : (
+            <div className="sheet-muted-text">暂无库存物品</div>
+          )}
+        </div>
+      </section>
+
+      {/* 背景设定 (三列) */}
+      <section className="sheet-block">
+        <header className="sheet-block__head">
+          <h3 className="sheet-block__title">背景设定</h3>
+        </header>
+        <div className="sheet-block__body" style={{ padding: 0 }}>
+          <div className="sheet-backstory-grid">
+            <div className="sheet-backstory-col">
+              <header className="sheet-backstory-head">
+                <span className="sheet-backstory-title">背景</span>
+              </header>
+              <div className="sheet-backstory-body">
+                {scalar(sheet.characterBackground) ? <p>{scalar(sheet.characterBackground)}</p> : <span className="sheet-muted-text">（未填写背景）</span>}
+              </div>
+            </div>
+            <div className="sheet-backstory-col">
+              <header className="sheet-backstory-head">
+                <span className="sheet-backstory-title">外貌</span>
+              </header>
+              <div className="sheet-backstory-body">
+                {scalar(sheet.characterAppearance) ? <p>{scalar(sheet.characterAppearance)}</p> : <span className="sheet-muted-text">（未填写外貌）</span>}
+              </div>
+            </div>
+            <div className="sheet-backstory-col">
+              <header className="sheet-backstory-head">
+                <span className="sheet-backstory-title">动机</span>
+              </header>
+              <div className="sheet-backstory-body">
+                {scalar(sheet.characterMotivation) ? <p>{scalar(sheet.characterMotivation)}</p> : <span className="sheet-muted-text">（未填写动机）</span>}
+              </div>
+            </div>
+          </div>
+        </div>
+      </section>
+
+      {/* 希望特性 */}
+      {hopeContent && (
+        <section className="sheet-block">
+          <header className="sheet-block__head">
+            <h3 className="sheet-block__title">希望特性</h3>
+          </header>
+          <div className="sheet-block__body">
+            <div className="sheet-hope-card">
+              <MarkdownContent content={hopeContent} />
+            </div>
+          </div>
+        </section>
+      )}
+
+      {/* 配置卡组 */}
+      <section className="sheet-block">
+        <header className="sheet-block__head">
+          <h3 className="sheet-block__title">配置卡组</h3>
+        </header>
+        <div className="sheet-block__body">
+          {activeCards.length > 0 ? (
+            <div className="sheet-cards-grid">
+              {activeCards.map((card, i) => {
+                const typeStr = String(card.type ?? '')
+                const typeConf = TYPE_CONFIG[typeStr] ?? { label: '卡牌', cls: '' }
+                const classStr = scalar(card.class)
+                const descStr = scalar(card.description)
+                return (
+                  <article key={String(card.id ?? i)} className="sheet-card-cell">
+                    <header className="sheet-card-cell__head">
+                      <h4 className="sheet-card-cell__title">{scalar(card.name)}</h4>
+                      <span className={`sheet-card-chip ${typeConf.cls}`}>{typeConf.label}</span>
+                    </header>
+                    {classStr && <div className="sheet-card-cell__sub">{classStr}</div>}
+                    <div className="sheet-card-cell__body">
+                      {descStr && <MarkdownContent content={descStr} />}
+                    </div>
+                  </article>
+                )
+              })}
+            </div>
+          ) : (
+            <div className="sheet-muted-text">配置卡组为空</div>
+          )}
+        </div>
+      </section>
+
+      {/* 宝库卡组 */}
+      <section className="sheet-block">
+        <header className="sheet-block__head">
+          <h3 className="sheet-block__title">宝库卡组</h3>
+        </header>
+        <div className="sheet-block__body">
+          {vaultCards.length > 0 ? (
+            <div className="sheet-cards-grid">
+              {vaultCards.map((card, i) => {
+                const typeStr = String(card.type ?? '')
+                const typeConf = TYPE_CONFIG[typeStr] ?? { label: '卡牌', cls: '' }
+                const classStr = scalar(card.class)
+                const descStr = scalar(card.description)
+                return (
+                  <article key={String(card.id ?? i)} className="sheet-card-cell">
+                    <header className="sheet-card-cell__head">
+                      <h4 className="sheet-card-cell__title">{scalar(card.name)}</h4>
+                      <span className={`sheet-card-chip ${typeConf.cls}`}>{typeConf.label}</span>
+                    </header>
+                    {classStr && <div className="sheet-card-cell__sub">{classStr}</div>}
+                    <div className="sheet-card-cell__body">
+                      {descStr && <MarkdownContent content={descStr} />}
+                    </div>
+                  </article>
+                )
+              })}
+            </div>
+          ) : (
+            <div className="sheet-empty-vault">— 宝库卡组暂无待命卡牌 —</div>
+          )}
+        </div>
+      </section>
+
+      {/* 完整角色字段（未排版拓展明细，满足数据完整性及测试断言） */}
+      <details className="sheet-source-details">
+        <summary>完整角色字段（含未单独排版的字段）</summary>
+        <dl>
+          {sourceFields(sheet).map(([name, value], index) => (
+            <div key={`${name}-${index}`}>
+              <dt>{name}</dt>
+              <dd>{value}</dd>
+            </div>
+          ))}
+        </dl>
+      </details>
+    </article>
+  )
 }

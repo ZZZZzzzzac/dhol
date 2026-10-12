@@ -7,8 +7,9 @@ describe('read-only character sheet', () => {
   it('renders long card text as escaped read-only content and current resources', () => {
     const html = renderToStaticMarkup(<ReadOnlyCharacterSheet sheet={{ ruleSetId: 'daggerheart', name: '阿岚', hope: 3, characterImage: 'data:image/jpeg;base64,SECRET', ancestry1: '人类', cards: [{ name: '能力', description: '<script>alert(1)</script>完整正文' }], adventureNotes: { characterProfile: { birthplace: '群山' }, backstory: '守护故乡。' } }} resources={{ hope: 2, hopeMax: 6, hp: [true, false], stress: [false], armor: [true] }} />)
     expect(html).toContain('&lt;script&gt;alert(1)&lt;/script&gt;完整正文')
-    expect(html).toContain('生命已标记')
-    expect(html).toContain('种族')
+    expect(html).toContain('熟练度与经历')
+    expect(html).toContain('金币存量')
+    expect(html).toContain('武器与护甲配置')
     expect(html).toContain('出生地')
     expect(html).toContain('守护故乡。')
     expect(html).not.toContain('characterImage')
