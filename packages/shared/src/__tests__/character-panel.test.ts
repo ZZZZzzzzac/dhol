@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest'
 import daggerheart from './fixtures/daggerheart-sheet.json'
 import rhodes from './fixtures/rhodes-sheet.json'
-import { characterNameKey, replaceCharacter, resourcesFromSheet, summaryFromSheet, type CharacterSheetJson } from '../character-panel'
+import { characterNameKey, displayedResourceMax, replaceCharacter, resourcesFromSheet, summaryFromSheet, type CharacterSheetJson } from '../character-panel'
 import { parseCharacterDelivery } from '../room-v2-validation'
 
 const dagger = daggerheart as CharacterSheetJson
@@ -47,6 +47,14 @@ describe('JSON delivery', () => {
     expect(resources.hp).toHaveLength(7)
     expect(resources.stress).toHaveLength(7)
     expect(resources.armor).toHaveLength(2)
+  })
+  it('includes the character builder’s permanent card bonus in displayed stress', () => {
+    const sheet = { ...dagger, hp: Array(18).fill(false), hpMax: 7, stress: Array(18).fill(false), stressMax: 6,
+      cards: [{ id: 'Human-HighStamina' }] }
+    expect(displayedResourceMax(sheet, 'hp')).toBe(7)
+    expect(displayedResourceMax(sheet, 'stress')).toBe(7)
+    expect(resourcesFromSheet(sheet).hp).toHaveLength(7)
+    expect(resourcesFromSheet(sheet).stress).toHaveLength(7)
   })
   it.each([
     [deliver({ ...dagger, name: ' ' }), 'INVALID_CHARACTER'],

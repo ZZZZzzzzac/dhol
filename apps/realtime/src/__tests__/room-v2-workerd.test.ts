@@ -1,6 +1,6 @@
 import { env, runInDurableObject } from 'cloudflare:test'
 import { describe, expect, it } from 'vitest'
-import type { RoomEvent } from '@dhgc/shared/desktop'
+import { summaryFromSheet, type RoomEvent } from '@dhgc/shared/desktop'
 import { signRoomV2Session } from '../room-v2-session'
 import { RoomV2Storage, type StoredMeta } from '../room-v2-storage'
 import type { RoomV2DurableObject } from '../room-v2'
@@ -101,6 +101,25 @@ describe('Room V2 workerd integration', () => {
       })).toThrow('injected transaction failure')
       expect(state.storage.sql.exec<{ seq: number }>('SELECT seq FROM panel_v2_meta WHERE id = 1').one().seq).toBe(0)
       expect(state.storage.sql.exec<{ count: number }>('SELECT COUNT(*) AS count FROM panel_v2_dice').one().count).toBe(0)
+    })
+  })
+
+  it('trims existing padded resource arrays to the builder’s displayed maxima in snapshots', async () => {
+    const { stub } = await createRoom('WRK003')
+    await runInDurableObject(stub, async (_instance, state) => {
+      const storage = new RoomV2Storage(state.storage)
+      const sheet = { ruleSetId: 'daggerheart' as const, name: '阿德兰', hope: 3, hpMax: 7, stressMax: 6,
+        hp: Array(18).fill(false) as boolean[], stress: Array(18).fill(false) as boolean[], armorBoxes: Array(12).fill(false) as boolean[],
+        cards: [{ id: 'Human-HighStamina' }] }
+      const resources = { hope: 3, hopeMax: 6, hp: [...sheet.hp], stress: [...sheet.stress], armor: [...sheet.armorBoxes] }
+      resources.hp[0] = true
+      resources.stress[0] = true
+      storage.saveCharacter(sheet.name, 1, 0, sheet, summaryFromSheet(sheet, resources, 1, 0), resources)
+      const character = storage.snapshot('player-a', [])!.room.characters[0]
+      expect(character.resources.hp).toHaveLength(7)
+      expect(character.resources.stress).toHaveLength(7)
+      expect(character.resources.hp[0]).toBe(true)
+      expect(character.resources.stress[0]).toBe(true)
     })
   })
 })

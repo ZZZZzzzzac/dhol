@@ -22,16 +22,52 @@ function attribute(value: unknown): string | null {
     : display(value)
 }
 
+function cardIds(sheet: CharacterSheetJson): Set<string> {
+  const cards = Array.isArray(sheet.cards) ? sheet.cards : []
+  return new Set(cards.flatMap(card => card && typeof card === 'object' && 'id' in card && typeof card.id === 'string' ? [card.id] : []))
+}
+
+/** Match the character builder's displayed resource limits; its arrays can contain 18 storage slots. */
+export function displayedResourceMax(sheet: CharacterSheetJson, resource: 'hp' | 'stress'): number {
+  const base = sheet[`${resource}Max`]
+  const cards = cardIds(sheet)
+  let bonus = 0
+  if (resource === 'hp') {
+    if (cards.has('Giant-Endurance')) bonus++
+    if (cards.has('School-of-War-Foundation')) bonus++
+  } else {
+    if (cards.has('Human-HighStamina')) bonus++
+    if (cards.has('Vengeance-Foundation')) bonus++
+  }
+
+  if (sheet.ruleSetId === 'rhodes-island') {
+    const subclass = sheet.subclassRef
+    const branch = subclass && typeof subclass === 'object' && 'id' in subclass && typeof subclass.id === 'string'
+      ? subclass.id : Array.isArray(sheet.cards) && sheet.cards[1] && typeof sheet.cards[1] === 'object' && 'id' in sheet.cards[1] && typeof sheet.cards[1].id === 'string' ? sheet.cards[1].id : ''
+    const level = Number.parseInt(String(sheet.level ?? '1'), 10) || 1
+    const stage = level >= 5 ? 2 : level >= 2 ? 1 : 0
+    if (resource === 'hp') {
+      if (branch === 'ri-branch-e1682fc4bea1') bonus += 1 + (level >= 8 && sheet.selectedModule === 'y' ? 1 : 0)
+      if (branch === 'ri-branch-f4162da267f0') bonus += [2, 2, 3][stage]
+    } else {
+      if (branch === 'ri-branch-dcb2660eeda4') bonus += [1, 2, 2][stage]
+      if (branch === 'ri-branch-f4162da267f0') bonus += [1, 1, 3][stage]
+      if (branch === 'ri-branch-b3775d66589c') bonus += [2, 2, 3][stage]
+    }
+  }
+  return Math.max(0, (typeof base === 'number' ? base : 6) + bonus)
+}
+
 export function resourcesFromSheet(sheet: CharacterSheetJson): CharacterResources {
   const track = (marks: unknown, max: unknown): boolean[] => {
     if (!Array.isArray(marks)) return []
-    return [...marks.slice(0, typeof max === 'number' ? max : marks.length)] as boolean[]
+    return Array.from({ length: Math.min(100, typeof max === 'number' ? max : marks.length) }, (_, index) => Boolean(marks[index]))
   }
   return {
     hope: sheet.hope,
     hopeMax: typeof sheet.hopeMax === 'number' ? sheet.hopeMax : 6,
-    hp: track(sheet.hp, sheet.hpMax),
-    stress: track(sheet.stress, sheet.stressMax),
+    hp: track(sheet.hp, displayedResourceMax(sheet, 'hp')),
+    stress: track(sheet.stress, displayedResourceMax(sheet, 'stress')),
     armor: track(sheet.armorBoxes, sheet.armorMax),
   }
 }

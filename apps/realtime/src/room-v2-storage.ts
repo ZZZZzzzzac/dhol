@@ -1,4 +1,4 @@
-import { summaryFromSheet, type CharacterResources, type CharacterSheetJson, type CharacterSummary, type DiceRollRecord, type MutationAck, type RoomV2Model } from '@dhgc/shared/desktop'
+import { displayedResourceMax, summaryFromSheet, type CharacterResources, type CharacterSheetJson, type CharacterSummary, type DiceRollRecord, type MutationAck, type RoomV2Model } from '@dhgc/shared/desktop'
 
 export interface StoredMeta {
   roomId: string
@@ -127,8 +127,8 @@ export class RoomV2Storage {
     const sheet = JSON.parse(row.source_json) as CharacterSheetJson
     return {
       ...resources,
-      hp: resources.hp.slice(0, typeof sheet.hpMax === 'number' ? sheet.hpMax : resources.hp.length),
-      stress: resources.stress.slice(0, typeof sheet.stressMax === 'number' ? sheet.stressMax : resources.stress.length),
+      hp: Array.from({ length: displayedResourceMax(sheet, 'hp') }, (_, index) => Boolean(resources.hp[index])),
+      stress: Array.from({ length: displayedResourceMax(sheet, 'stress') }, (_, index) => Boolean(resources.stress[index])),
       armor: resources.armor.slice(0, typeof sheet.armorMax === 'number' ? sheet.armorMax : resources.armor.length),
     }
   }

@@ -12,7 +12,6 @@ import XCard from './components/XCard'
 import DicePanel, { type RoomLogItem } from './components/DicePanel'
 import RoomToolbar from './components/RoomToolbar'
 import BackupDialog from './components/BackupDialog'
-import ImportCharacterDialog from './components/ImportCharacterDialog'
 import './components/character-panel/character-panel.css'
 
 const DEFAULT_CLOCKS: CountdownClock[] = [
@@ -32,7 +31,6 @@ export default function DesktopRoom({ session, onLeave }: { session: DesktopSess
 
   const lifecycle = useRef(0)
   const [detail, setDetail] = useState<{ character: CharacterSummary; state: DetailState } | null>(null)
-  const [importOpen, setImportOpen] = useState(false)
 
   // 倒计时持久化
   const countdownsStorageKey = `dhol-countdowns-${session.roomId}`
@@ -87,7 +85,6 @@ export default function DesktopRoom({ session, onLeave }: { session: DesktopSess
   const ui = useSyncExternalStore(sync.ui.subscribe, sync.ui.getState)
   const room = state.room
   const ready = state.connection === 'ready'
-  const saveText = state.save === 'saving' ? '保存中' : state.save === 'failed' ? '保存失败' : '已保存'
   const submit = (command: Parameters<RoomSync['submit']>[0]) => { try { sync.submit(command) } catch { /* status explains the failure */ } }
 
   useEffect(() => {
@@ -149,15 +146,6 @@ export default function DesktopRoom({ session, onLeave }: { session: DesktopSess
     addRoomLog(`${character.name} 掷${statName}（${modifier >= 0 ? '+' : ''}${modifier}）`)
   }
 
-  function resetRoom() {
-    if (!room || !ready || !window.confirm('重置恐惧、倒计时和掷骰记录？角色与资源标记会保留。')) return
-    for (let i = 0; i < room.fear.value; i++) submit({ type: 'room.adjustFear', delta: -1 })
-    submit({ type: 'dice.clearHistory' })
-    handleClocksChange(DEFAULT_CLOCKS.map(clock => ({ ...clock })))
-    handleClearRoomLog()
-    addRoomLog('已重置恐惧、倒计时与掷骰记录')
-  }
-
   async function exportBackup() {
     const response = await fetch(`${apiBase()}/api/v2/rooms/${session.inviteCode}/export`, { headers: { Authorization: `Bearer ${session.token}` } })
     if (!response.ok) throw new Error('无法导出房间备份。')
@@ -184,12 +172,8 @@ export default function DesktopRoom({ session, onLeave }: { session: DesktopSess
       roomName={room?.name ?? '正在同步房间'}
       inviteCode={session.inviteCode}
       status={state.connection}
-      save={saveText}
-      reason={state.reason}
       activeCount={room?.members.filter(m => m.online).length}
       xCardNode={<XCard active={Boolean(room?.xCard.active)} ready={ready} onChange={handleXCardChange} />}
-      onImport={() => setImportOpen(true)}
-      onReset={resetRoom}
       onExport={() => sync.ui.setDialog('backup')}
     />
 
@@ -275,6 +259,5 @@ export default function DesktopRoom({ session, onLeave }: { session: DesktopSess
     {ui.dialog === 'backup' && (
       <BackupDialog onClose={() => sync.ui.setDialog(null)} onExport={exportBackup} />
     )}
-    {importOpen && <ImportCharacterDialog session={session} onClose={() => setImportOpen(false)} />}
   </main>
 }
