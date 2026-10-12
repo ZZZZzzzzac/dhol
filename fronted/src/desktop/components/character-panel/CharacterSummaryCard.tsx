@@ -65,6 +65,11 @@ function CharacterSummaryCard({ character, ready, onHope, onMark, onDetail, onDe
     </dl>
     <div className="character-card__weapons">
       <div className="weapon-info"><small>主武器</small><strong>{value(character.primaryWeaponName)}</strong><span>{[character.primaryWeaponTrait, character.primaryWeaponRange].filter(Boolean).join(' · ') || '属性 / 攻击距离未填写'}</span></div>
+      {character.experiences?.map((experience, index) => <div className="experience-info" key={`${experience.kind}-${index}`}>
+        <small>{experience.kind === 'ancestry' ? '种族经历' : '经历'}</small>
+        <strong>{experience.name}</strong>
+        <span>{experience.bonus ?? '—'}</span>
+      </div>)}
       {character.secondaryWeaponName && <div className="weapon-info"><small>副武器</small><strong>{character.secondaryWeaponName}</strong><span>{[character.secondaryWeaponTrait, character.secondaryWeaponRange].filter(Boolean).join(' · ') || '属性 / 攻击距离未填写'}</span></div>}
     </div>
     <footer>

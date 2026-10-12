@@ -28,4 +28,17 @@ describe('character panel pagination', () => {
     expect(html).toContain('敏捷 · 远距离')
     expect(html).not.toContain('主武器伤害')
   })
+  it('renders one row for each named experience directly below the primary weapon', () => {
+    const item = character('阿岚', 0)
+    item.primaryWeaponName = '短弓'
+    item.experiences = [
+      { name: '身经百战', bonus: '+2', kind: 'standard' },
+      { name: '走遍大陆', bonus: '+3', kind: 'standard' },
+    ]
+    const html = renderToStaticMarkup(<CharacterSummaryCard character={item} ready onHope={() => undefined} onMark={() => undefined} onDetail={() => undefined} onDelete={() => undefined} onQuickRollStat={() => undefined} />)
+    expect(html.match(/class="experience-info"/g)).toHaveLength(2)
+    expect(html.indexOf('短弓')).toBeLessThan(html.indexOf('身经百战'))
+    expect(html).toContain('身经百战</strong><span>+2</span>')
+    expect(html).toContain('走遍大陆</strong><span>+3</span>')
+  })
 })

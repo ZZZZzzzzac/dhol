@@ -2,6 +2,7 @@
 .character-grid {
   display: grid;
   grid-template-columns: repeat(4, minmax(0, 1fr));
+  align-items: start;
   gap: 16px;
 }
 
@@ -319,6 +320,18 @@
 }
 
 .weapon-info span { margin-left: auto; color: var(--ink-secondary); text-align: right; }
+
+.experience-info {
+  display: flex;
+  align-items: baseline;
+  gap: 8px;
+  padding: 4px 6px;
+  font-size: 13px;
+}
+
+.experience-info small { flex: none; color: var(--ink-secondary); }
+.experience-info strong { min-width: 0; flex: 1; font-weight: 700; overflow-wrap: anywhere; }
+.experience-info span { flex: none; font-family: var(--font-mono); font-weight: 800; }
 
 /* 卡片底栏 */
 .character-card footer {

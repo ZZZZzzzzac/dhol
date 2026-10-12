@@ -30,6 +30,7 @@ export interface CharacterSummary {
   secondaryWeaponTrait: string | null
   secondaryWeaponRange: string | null
   secondaryWeaponDamage: string | null
+  experiences?: Array<{ name: string; bonus: string | null; kind: 'standard' | 'ancestry' }>
 }
 export interface RoomMember {
   id: string

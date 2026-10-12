@@ -56,6 +56,18 @@ describe('JSON delivery', () => {
     expect(resourcesFromSheet(sheet).hp).toHaveLength(7)
     expect(resourcesFromSheet(sheet).stress).toHaveLength(7)
   })
+  it('pairs only named experiences with their matching bonuses, including ancestry experience', () => {
+    const sheet = { ...dagger,
+      experience: ['身经百战', '', '走遍大陆', '未填加值'], experienceValues: ['2', '9', '+3', ''],
+      ancestryExperience: ['旧城居民'], ancestryExperienceValues: ['2'],
+    }
+    expect(summaryFromSheet(sheet, resourcesFromSheet(sheet), 1, 0).experiences).toEqual([
+      { name: '旧城居民', bonus: '+2', kind: 'ancestry' },
+      { name: '身经百战', bonus: '+2', kind: 'standard' },
+      { name: '走遍大陆', bonus: '+3', kind: 'standard' },
+      { name: '未填加值', bonus: null, kind: 'standard' },
+    ])
+  })
   it('uses the builder display snapshot while preserving every edited source field on replacement', () => {
     const desktopView = {
       version: 1, evasion: '12', armorValue: '3', minorThreshold: '17', majorThreshold: '28',

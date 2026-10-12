@@ -42,6 +42,17 @@ function attribute(value: unknown): string | null {
     : display(value)
 }
 
+function experienceRows(names: unknown, bonuses: unknown, kind: 'standard' | 'ancestry'): NonNullable<CharacterSummary['experiences']> {
+  if (!Array.isArray(names)) return []
+  return names.flatMap((rawName, index) => {
+    const name = display(rawName)
+    if (!name) return []
+    const rawBonus = Array.isArray(bonuses) ? display(bonuses[index]) : null
+    const bonus = rawBonus && /^\d+(?:\.\d+)?$/.test(rawBonus) && Number(rawBonus) > 0 ? `+${rawBonus}` : rawBonus
+    return [{ name, bonus, kind }]
+  })
+}
+
 function cardIds(sheet: CharacterSheetJson): Set<string> {
   const cards = Array.isArray(sheet.cards) ? sheet.cards : []
   return new Set(cards.flatMap(card => card && typeof card === 'object' && 'id' in card && typeof card.id === 'string' ? [card.id] : []))
@@ -114,6 +125,10 @@ export function summaryFromSheet(sheet: CharacterSheetJson, resources: Character
     secondaryWeaponTrait: display(sheet.desktopView?.secondaryWeaponAttribute ?? sheet.secondaryWeaponTrait),
     secondaryWeaponRange: display(sheet.desktopView?.secondaryWeaponRange ?? sheet.secondaryWeaponRange ?? sheet.secondaryWeaponDistance),
     secondaryWeaponDamage: display(sheet.secondaryWeaponDamage),
+    experiences: [
+      ...experienceRows(sheet.ancestryExperience, sheet.ancestryExperienceValues, 'ancestry'),
+      ...experienceRows(sheet.experience, sheet.experienceValues, 'standard'),
+    ],
   }
 }
 
