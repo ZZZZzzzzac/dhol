@@ -8,6 +8,7 @@ export default function RoomToolbar({
   xCardNode,
   onExport,
   onLeave,
+  onDelete,
 }: {
   roomName: string
   inviteCode: string
@@ -16,6 +17,7 @@ export default function RoomToolbar({
   xCardNode?: ReactNode
   onExport: () => void
   onLeave: () => void
+  onDelete?: () => void
 }) {
   const copy = () => void navigator.clipboard?.writeText(inviteCode)
 
@@ -40,6 +42,7 @@ export default function RoomToolbar({
       {xCardNode}
       <button type="button" className="button button--ghost" onClick={onExport}>导出</button>
       <button type="button" className="button button--ghost" onClick={onLeave}>退出房间</button>
+      {onDelete && <button type="button" className="button button--danger" onClick={onDelete}>删除房间</button>}
     </div>
   </header>
 }

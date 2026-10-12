@@ -89,6 +89,17 @@ input, select, textarea {
   color: var(--ink) !important;
 }
 
+.button--danger {
+  background: var(--red) !important;
+  border-color: var(--red) !important;
+  color: #fff !important;
+}
+
+.button--danger:hover {
+  background: var(--red-hover) !important;
+  border-color: var(--red-hover) !important;
+}
+
 .desktop-app {
   min-height: 100vh;
 }
@@ -714,6 +725,11 @@ input, select, textarea {
 .btn-alert-confirm:hover {
   background: var(--red-hover) !important;
 }
+
+.delete-room-confirmation > p { margin: 0 0 12px; line-height: 1.7; }
+.delete-room-confirmation > p:first-child { font-size: 16px; font-weight: 800; }
+.delete-room-error { color: var(--red); font-weight: 800; }
+.delete-room-actions { display: flex; justify-content: flex-end; gap: 8px; margin-top: 20px; }
 
 /* 状态和对话框 */
 .notice {

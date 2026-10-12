@@ -147,4 +147,22 @@ describe('Room V2 workerd integration', () => {
       expect(restored.snapshot('player-a', [])?.room.characters[0].resources.gold?.[20]).toBe(true)
     })
   })
+
+  it('allows only the creator to permanently delete all room storage', async () => {
+    const { stub, room } = await createRoom('WRK005')
+    const tokenFor = (player: StoredMeta['players'][number]) => signRoomV2Session(env.SESSION_SECRET, {
+      roomId: room.roomId, inviteCode: room.inviteCode, playerId: player.id, nickname: player.nickname,
+    })
+    const remove = async (player: StoredMeta['players'][number]) => stub.fetch(new Request('https://room-v2.internal/internal/v2/delete', {
+      method: 'DELETE', headers: { Authorization: `Bearer ${await tokenFor(player)}` },
+    }))
+
+    expect((await remove(room.players[1])).status).toBe(403)
+    expect((await remove(room.players[0])).status).toBe(200)
+
+    const join = await stub.fetch(new Request('https://room-v2.internal/internal/v2/join', {
+      method: 'POST', body: JSON.stringify({ playerId: 'late-player', nickname: '迟到者' }),
+    }))
+    expect(join.status).toBe(404)
+  })
 })

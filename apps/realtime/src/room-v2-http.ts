@@ -27,7 +27,7 @@ function cors(request: Request, env: RoomV2Env, result: Response): Response {
   headers.set('Access-Control-Allow-Origin', origin)
   headers.set('Vary', 'Origin')
   headers.set('Access-Control-Allow-Headers', 'Content-Type, Authorization, Idempotency-Key')
-  headers.set('Access-Control-Allow-Methods', 'GET, POST, OPTIONS')
+  headers.set('Access-Control-Allow-Methods', 'GET, POST, DELETE, OPTIONS')
   return new Response(result.body, { status: result.status, headers })
 }
 
@@ -127,7 +127,7 @@ export async function routeRoomV2(request: Request, env: RoomV2Env): Promise<Res
   if (!url.pathname.startsWith('/api/v2/rooms')) return null
   if (!originAllowed(request, env)) return response({ code: 'ORIGIN_NOT_ALLOWED' }, 403)
   if (request.method === 'OPTIONS') return cors(request, env, new Response(null, { status: 204 }))
-  if (request.method !== 'GET' && request.method !== 'POST') return cors(request, env, response({ code: 'METHOD_NOT_ALLOWED' }, 405))
+  if (request.method !== 'GET' && request.method !== 'POST' && request.method !== 'DELETE') return cors(request, env, response({ code: 'METHOD_NOT_ALLOWED' }, 405))
   let result: Response
   if (url.pathname === '/api/v2/rooms' && request.method === 'POST') result = await create(request, env)
   else if (url.pathname === '/api/v2/rooms/join' && request.method === 'POST') result = await join(request, env)
@@ -142,7 +142,8 @@ export async function routeRoomV2(request: Request, env: RoomV2Env): Promise<Res
     if (tail === '/ws' && request.headers.get('Upgrade')?.toLowerCase() === 'websocket') {
       return stub(env, inviteCode).fetch(internal(`/internal/v2/ws?${url.searchParams.toString()}`, { headers: request.headers }))
     }
-    if (tail === '/snapshot' && request.method === 'GET') result = await stub(env, inviteCode).fetch(internal('/internal/v2/snapshot', { headers }))
+    if (tail === '' && request.method === 'DELETE') result = await stub(env, inviteCode).fetch(internal('/internal/v2/delete', { method: 'DELETE', headers }))
+    else if (tail === '/snapshot' && request.method === 'GET') result = await stub(env, inviteCode).fetch(internal('/internal/v2/snapshot', { headers }))
     else if (tail === '/export' && request.method === 'GET') result = await stub(env, inviteCode).fetch(internal('/internal/v2/export', { headers }))
     else if (tail.startsWith('/characters/') && request.method === 'GET') result = await stub(env, inviteCode).fetch(internal(`/internal/v2${tail}?${url.searchParams.toString()}`, { headers }))
     else result = response({ code: 'NOT_FOUND' }, 404)

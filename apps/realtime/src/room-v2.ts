@@ -95,6 +95,22 @@ export class RoomV2DurableObject extends DurableObject<RoomV2Env> {
     }
     const session = await this.session(request)
     if (!session) return json({ code: 'UNAUTHORIZED' }, 401)
+    if (url.pathname === '/internal/v2/delete' && request.method === 'DELETE') {
+      const meta = this.db.meta()
+      if (!meta) return json({ code: 'ROOM_NOT_FOUND' }, 404)
+      if (meta.players[0]?.id !== session.playerId) return json({ code: 'ROOM_DELETE_FORBIDDEN' }, 403)
+      const expiresAt = meta.expiresAt
+      try {
+        await this.ctx.storage.deleteAlarm()
+        await this.ctx.storage.deleteAll()
+      } catch {
+        try { await this.ctx.storage.setAlarm(Date.parse(expiresAt)) } catch { /* best-effort expiry recovery */ }
+        return json({ code: 'PERSISTENCE_FAILED' }, 503)
+      }
+      this.db.resetAfterDelete()
+      for (const socket of this.ctx.getWebSockets()) socket.close(1008, 'Room deleted')
+      return json({ ok: true })
+    }
     if (this.expired()) return json({ code: 'ROOM_EXPIRED' }, 410)
     if (url.pathname === '/internal/v2/ws' && request.headers.get('Upgrade')?.toLowerCase() === 'websocket') {
       const pair = new WebSocketPair()

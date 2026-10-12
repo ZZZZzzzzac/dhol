@@ -12,13 +12,8 @@ import XCard from './components/XCard'
 import DicePanel, { type RoomLogItem } from './components/DicePanel'
 import RoomToolbar from './components/RoomToolbar'
 import BackupDialog from './components/BackupDialog'
+import { clearRoomBrowserState, loadCountdowns } from './room-browser-state'
 import './components/character-panel/character-panel.css'
-
-const DEFAULT_CLOCKS: CountdownClock[] = [
-  { id: 'c1', name: '援军抵达', value: 3, max: 4 },
-  { id: 'c2', name: '仪式反噬', value: 5, max: 6 },
-  { id: 'c3', name: '遗迹坍塌', value: 2, max: 8 }
-]
 
 export default function DesktopRoom({ session, onLeave }: { session: DesktopSession; onLeave: () => void }) {
   const sync = useMemo(() => new RoomSync({
@@ -31,17 +26,13 @@ export default function DesktopRoom({ session, onLeave }: { session: DesktopSess
 
   const lifecycle = useRef(0)
   const [detail, setDetail] = useState<{ character: CharacterSummary; state: DetailState } | null>(null)
+  const [deleteOpen, setDeleteOpen] = useState(false)
+  const [deleting, setDeleting] = useState(false)
+  const [deleteError, setDeleteError] = useState('')
 
   // 倒计时持久化
   const countdownsStorageKey = `dhol-countdowns-${session.roomId}`
-  const [clocks, setClocks] = useState<CountdownClock[]>(() => {
-    try {
-      const saved = localStorage.getItem(countdownsStorageKey)
-      return saved ? JSON.parse(saved) as CountdownClock[] : DEFAULT_CLOCKS
-    } catch {
-      return DEFAULT_CLOCKS
-    }
-  })
+  const [clocks, setClocks] = useState<CountdownClock[]>(() => loadCountdowns(localStorage, countdownsStorageKey))
 
   // 房间流水记录持久化
   const roomLogStorageKey = `dhol-roomlog-${session.roomId}`
@@ -166,6 +157,37 @@ export default function DesktopRoom({ session, onLeave }: { session: DesktopSess
     URL.revokeObjectURL(link.href)
   }
 
+  function leaveDeletedRoom() {
+    try { clearRoomBrowserState(localStorage, session.roomId) } catch { /* storage may be unavailable */ }
+    onLeave()
+  }
+
+  async function deleteRoom() {
+    setDeleting(true)
+    setDeleteError('')
+    try {
+      const response = await fetch(`${apiBase()}/api/v2/rooms/${session.inviteCode}`, {
+        method: 'DELETE',
+        headers: { Authorization: `Bearer ${session.token}` }
+      })
+      const result = await response.json() as { code?: string }
+      if (!response.ok) {
+        if (result.code === 'ROOM_DELETE_FORBIDDEN') throw new Error('只有房间创建者可以删除房间。')
+        throw new Error('删除失败，房间数据尚未清除，请稍后重试。')
+      }
+      leaveDeletedRoom()
+    } catch (cause) {
+      setDeleteError(cause instanceof Error ? cause.message : '删除失败，房间数据尚未清除，请稍后重试。')
+      setDeleting(false)
+    }
+  }
+
+  useEffect(() => {
+    if (state.connection === 'expired' && /deleted/i.test(state.reason ?? '')) leaveDeletedRoom()
+  // Room deletion is terminal and should clear this browser's room data exactly once.
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [state.connection, state.reason])
+
   const liveDetail = detail && room ? room.characters.find(item => item.name === detail.character.name && item.generation === detail.character.generation) : null
   const detailState = detail?.state.status === 'ready' && liveDetail ? { ...detail.state, resources: liveDetail.resources } : detail?.state
 
@@ -185,6 +207,7 @@ export default function DesktopRoom({ session, onLeave }: { session: DesktopSess
       xCardNode={<XCard active={Boolean(room?.xCard.active)} ready={ready} onChange={handleXCardChange} />}
       onExport={() => sync.ui.setDialog('backup')}
       onLeave={onLeave}
+      onDelete={room?.members[0]?.id === session.playerId ? () => { setDeleteError(''); setDeleteOpen(true) } : undefined}
     />
 
     <div className="desktop-workspace">
@@ -270,6 +293,28 @@ export default function DesktopRoom({ session, onLeave }: { session: DesktopSess
 
     {ui.dialog === 'backup' && (
       <BackupDialog onClose={() => sync.ui.setDialog(null)} onExport={exportBackup} />
+    )}
+
+    {deleteOpen && (
+      <div className="modal-overlay show" role="dialog" aria-modal="true" aria-labelledby="delete-room-title">
+        <div className="modal-box modal-box--sm">
+          <div className="modal-bar">
+            <h2 id="delete-room-title">彻底删除房间</h2>
+            <button type="button" disabled={deleting} onClick={() => setDeleteOpen(false)}>关闭</button>
+          </div>
+          <div className="modal-content delete-room-confirmation">
+            <p>确定删除房间“{room?.name}”吗？</p>
+            <p>角色卡、资源状态、掷骰记录及所有房间数据都会被永久删除，无法恢复。</p>
+            {deleteError && <p className="delete-room-error" role="alert">{deleteError}</p>}
+            <div className="delete-room-actions">
+              <button type="button" disabled={deleting} onClick={() => setDeleteOpen(false)}>取消</button>
+              <button type="button" className="btn-alert-confirm" disabled={deleting} onClick={() => void deleteRoom()}>
+                {deleting ? '正在删除…' : '确认彻底删除'}
+              </button>
+            </div>
+          </div>
+        </div>
+      </div>
     )}
   </main>
 }
