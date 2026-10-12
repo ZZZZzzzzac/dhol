@@ -7,11 +7,11 @@ export interface DesktopSession {
   websocketUrl: string
 }
 
+export function resolveApiBase(configured: unknown, dev: boolean, origin: string): string {
+  if (typeof configured === 'string' && configured.trim()) return configured.replace(/\/$/, '')
+  return dev ? 'http://127.0.0.1:8787' : origin.replace(/\/$/, '')
+}
+
 export function apiBase(): string {
-  const configured = import.meta.env.VITE_REALTIME_API_BASE
-  return typeof configured === 'string' && configured.trim()
-    ? configured.replace(/\/$/, '')
-    : import.meta.env.DEV
-      ? 'http://127.0.0.1:8787'
-      : 'https://dhol-realtime.gooole-dql.workers.dev'
+  return resolveApiBase(import.meta.env.VITE_REALTIME_API_BASE, import.meta.env.DEV, window.location.origin)
 }

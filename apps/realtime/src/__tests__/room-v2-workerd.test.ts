@@ -26,9 +26,11 @@ async function createRoom(inviteCode: string) {
   return { stub, room }
 }
 
-async function socketFor(stub: DurableObjectStub<RoomV2DurableObject>, room: StoredMeta, player: StoredMeta['players'][number]): Promise<WebSocket> {
+async function socketFor(stub: DurableObjectStub<RoomV2DurableObject>, room: StoredMeta, player: StoredMeta['players'][number], authorization?: string): Promise<WebSocket> {
   const token = await signRoomV2Session(env.SESSION_SECRET, { roomId: room.roomId, inviteCode: room.inviteCode, playerId: player.id, nickname: player.nickname })
-  const response = await stub.fetch(new Request(`https://room-v2.internal/internal/v2/ws?token=${token}`, { headers: { Upgrade: 'websocket' } }))
+  const headers = new Headers({ Upgrade: 'websocket' })
+  if (authorization) headers.set('Authorization', authorization)
+  const response = await stub.fetch(new Request(`https://room-v2.internal/internal/v2/ws?token=${token}`, { headers }))
   expect(response.status).toBe(101)
   const socket = response.webSocket
   expect(socket).not.toBeNull()
@@ -47,6 +49,21 @@ function nextRoll(socket: WebSocket): Promise<Extract<RoomEvent, { type: 'dice.r
 }
 
 describe('Room V2 workerd integration', () => {
+  it('uses the query session token when a same-origin preview forwards Basic Auth', async () => {
+    const { stub, room } = await createRoom('WRK000')
+    const socket = await socketFor(stub, room, room.players[0], 'Basic dGVzdGVyOnByZXZpZXc=')
+    const snapshot = new Promise<{ type: string; room: { roomId: string } }>((resolve, reject) => {
+      const timeout = setTimeout(() => reject(new Error('timed out waiting for room.snapshot')), 5_000)
+      socket.addEventListener('message', message => {
+        clearTimeout(timeout)
+        resolve(JSON.parse(String(message.data)) as { type: string; room: { roomId: string } })
+      })
+    })
+    socket.send(JSON.stringify({ type: 'room.sync', protocolVersion: 2, afterSeq: 0, pendingRequestIds: [] }))
+    await expect(snapshot).resolves.toMatchObject({ type: 'room.snapshot', room: { roomId: room.roomId } })
+    socket.close()
+  })
+
   it('uses real SQLite membership and broadcasts one persisted roll to two WebSockets', async () => {
     const { stub, room } = await createRoom('WRK001')
     const first = await socketFor(stub, room, room.players[0])

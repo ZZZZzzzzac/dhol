@@ -35,7 +35,8 @@ export class RoomV2DurableObject extends DurableObject<RoomV2Env> {
 
   private async session(request: Request): Promise<RoomV2Session | null> {
     const url = new URL(request.url)
-    const bearer = request.headers.get('authorization')?.replace(/^Bearer /, '')
+    const authorization = request.headers.get('authorization')
+    const bearer = authorization?.match(/^Bearer\s+(.+)$/i)?.[1]
     const token = bearer ?? url.searchParams.get('token') ?? ''
     const session = await verifyRoomV2Session(this.env.SESSION_SECRET, token)
     if (!session) return null
