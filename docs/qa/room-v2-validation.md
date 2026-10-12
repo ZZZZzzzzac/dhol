@@ -209,3 +209,13 @@ Playwright CLI 连接启用 `VITE_ENABLE_PREVIEW=true` 的本地 Vite 8.0.13，�
 一次性 localStorage 测试覆盖持久 marker 下的刷新/重复调用幂等性，并证明保留 Room V2 session/outbox、自定义骰子预设、车卡器存档、preview 状态和无关同源键；测试实现禁止调用 `localStorage.clear()`。阶段十矩阵中的协议、持久化、故障注入、只读卡、X 卡、JSON 全覆盖及双客户端可靠性由前序阶段测试和记录支持，本轮完整回归证明最终候选未破坏这些自动化契约；本轮路由冒烟没有创建房间，不能替代线上双客户端闭环。
 
 以下项目仍是发布后或正式环境专属，**未通过且未声称通过**：生产 `RoomDurableObject` 删除及 namespace/旧 alarm/旧连接退役证据；正式域名两客户端创建、JSON 投递、四资源标记、掷骰一致、刷新/重连与导出恢复；删除前后 Room V2 状态隔离对照；约 30 分钟空闲观察；至少两次完整跑团；连续七天用量趋势。车卡器仓库此前成功的 45 项定向测试与 `pnpm build:local` 未在本轮重跑；其现有 `lib/embedded-styles.ts` 生成变更未被本轮修改或提交。
+
+## 阶段十 10B：正式候选部署记录（2026-10-12）
+
+用户确认当前没有需要保留的旧房间数据后，按“Worker → Pages → 车卡器”顺序发布。`dhol-realtime` Worker 从提交 `076c99b` 部署成功，版本 ID 为 `90ecccb9-a704-4154-a375-26fd0825adda`；部署输出只列出 `ROOMS_V2 (RoomV2DurableObject)`，并应用配置中的 v3 旧类删除候选。正式 Worker 地址为 `https://dhol-realtime.gooole-dql.workers.dev`。部署后旧 `/api/rooms/TEST01` 返回 HTTP 410 和 `LEGACY_ROOMS_RETIRED`；新版 `/api/v2/rooms` 返回 HTTP 200，并成功创建生产冒烟房间 `c728dfdc-1254-40eb-9195-5f8c9a06b72f`（邀请码 `CNXB6Q`）。报告不记录会话令牌。
+
+`dhol/main` 已快进并推送到 `076c99b`。Git 触发的 `screenol` Pages 部署 `566fa5ef-db9c-495a-afda-45e505eadd7c` 成功，但线上资产检查发现构建期 `VITE_ENABLE_PREVIEW` 缺失，导致受认证的 `/preview` 仍会显示维护页。随后在 Pages 生产环境新增加密变量 `VITE_ENABLE_PREVIEW=true`，保留既有 `PREVIEW_PASSWORD`，用相同提交重新构建并部署；正式部署 ID 为 `8c3ff929-37f9-4866-bbc6-9bf2a97bc7d3`。线上资产确认入口调用已编译为 preview enabled；`/` 返回 HTTP 200 并显示“当前项目技术升级中”，未认证 `/preview` 返回 HTTP 401 与 Basic Auth challenge。Pages 服务绑定上的旧 API 返回 410，新版创建 API 返回 200，并创建代理链路冒烟房间 `626c295b-a31b-4cdf-99d3-8dfac092e728`（邀请码 `VQ664Q`）。
+
+车卡器 `DaggerHeart-CharacterSheet/main` 已推送到 `53dc70b`，Cloudflare Pages 项目 `dhsheet` 的正式部署 `27219bf9-eaf6-4540-9110-1c865166b507` 为 Active；`https://dhsheet.top` 返回 HTTP 200。该提交只刷新 Room V2 投递功能所需的生成 CSS 产物，前序 45/45 定向测试和 `pnpm build:local` 已通过。
+
+本次部署已经完成版本发布、旧 API 固定拒绝、新版直接 Worker 创建、Pages 代理创建、维护首页、preview 构建开关与认证边界的线上验证。仍留给用户在受保护 `/preview` 中完成：两个真实浏览器加入同一房间、车卡器 JSON 投递、四资源修改、服务器掷骰一致、刷新/重连、备份导出恢复，以及后续约 30 分钟空闲、两次完整跑团和七天用量趋势。用户确认体验后，最终代码变更只移除维护入口 gate，让 Room V2 从 `/` 直接访问；不恢复任何旧房间运行时。
