@@ -523,16 +523,25 @@ input, select, textarea {
 
 .dice-body { padding: 24px; }
 
+.dice-body--dual,
+.dice-workspace {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
+  gap: 16px;
+}
+
+.dice-body--dual .duality-board { grid-column: 1 / -1; }
+
 .duality-board {
   display: grid;
-  grid-template-columns: 1fr 1fr;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
   gap: 16px;
-  margin-bottom: 20px;
 }
 
 .duality-card {
   border: 2px solid var(--border);
   padding: 24px;
+  min-height: 170px;
   text-align: center;
   display: flex;
   flex-direction: column;
@@ -557,18 +566,21 @@ input, select, textarea {
 .duality-card--hope .duality-card-num { color: var(--blue); }
 .duality-card--fear .duality-card-num { color: var(--red); }
 
-.dice-params-grid {
-  display: grid;
-  grid-template-columns: 140px 180px minmax(0, 1fr);
-  gap: 12px;
+.dice-controls {
+  display: flex;
+  flex-direction: column;
+  gap: 18px;
   background: var(--surface-subtle);
-  padding: 16px;
+  padding: 24px;
   border: 1px solid var(--border-subtle);
-  margin-bottom: 16px;
+  min-width: 0;
 }
 
 .param-unit { display: flex; flex-direction: column; gap: 6px; }
 .param-label { font-size: 13px; font-weight: 800; }
+.dice-controls .param-unit input { width: 100%; height: 44px; }
+.dice-modifier-presets { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 10px; }
+.dice-modifier-presets button { min-width: 0; height: 44px; padding: 0; font-size: 16px; }
 
 .btn-roll-main {
   width: 100%;
@@ -580,16 +592,17 @@ input, select, textarea {
   border-color: var(--ink);
 }
 
-.btn-roll-main:hover { background: var(--blue) !important; border-color: var(--blue); }
+.btn-roll-main:hover:not(:disabled) { background: var(--blue) !important; border-color: var(--blue); }
 
 .result-banner {
-  border: 2px solid var(--border);
+  border: 1px solid var(--border);
   padding: 18px 24px;
   display: flex;
+  flex-direction: column;
+  align-items: flex-start;
   justify-content: space-between;
-  align-items: center;
-  background: #FAF9F6;
-  margin-top: 18px;
+  min-width: 0;
+  background: var(--surface-subtle);
 }
 
 .result-verdict { font-size: 24px; font-weight: 900; }
@@ -598,17 +611,20 @@ input, select, textarea {
 .result-verdict.fear { color: var(--red); }
 
 .result-formula { font-family: var(--font-mono); font-size: 14px; color: var(--ink-secondary); margin-top: 4px; }
-.result-total { font-family: var(--font-mono); font-size: 54px; font-weight: 900; line-height: 1; }
+.result-total { font-family: var(--font-mono); font-size: clamp(54px, 6vw, 90px); font-weight: 900; line-height: 1; align-self: center; margin: auto 0; }
 
 .std-sides-row {
   display: grid;
-  grid-template-columns: repeat(7, 1fr);
-  gap: 6px;
+  grid-template-columns: repeat(7, minmax(0, 1fr));
+  gap: 8px;
   margin-bottom: 16px;
 }
 
 .std-side-btn {
-  padding: 14px 0;
+  position: relative;
+  min-width: 0;
+  min-height: 48px;
+  padding: 12px 0;
   text-align: center;
   font-family: var(--font-mono);
   font-size: 16px;
@@ -616,17 +632,49 @@ input, select, textarea {
 }
 
 .std-side-btn.active { background: var(--ink); color: #fff; }
+.std-side-count {
+  position: absolute;
+  top: -8px;
+  right: -6px;
+  display: grid;
+  place-items: center;
+  min-width: 22px;
+  height: 22px;
+  padding: 0 4px;
+  border: 1px solid var(--ink);
+  border-radius: 50%;
+  background: var(--surface);
+  color: var(--ink);
+  font-family: var(--font-mono);
+  font-size: 11px;
+  line-height: 1;
+}
 
 .std-result-box {
   border: 1px solid var(--border);
   padding: 24px;
   background: var(--surface-subtle);
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
   text-align: center;
-  margin-top: 16px;
 }
 
 .std-total-num { font-family: var(--font-mono); font-size: 60px; font-weight: 900; line-height: 1; }
-.std-breakdown-txt { font-family: var(--font-mono); font-size: 14px; color: var(--ink-secondary); margin-top: 8px; }
+.std-breakdown-txt { font-family: var(--font-mono); font-size: 14px; color: var(--ink-secondary); margin-top: 8px; overflow-wrap: anywhere; }
+.std-current-formula { font-family: var(--font-mono); font-size: 13px; color: var(--ink-secondary); margin-top: 12px; overflow-wrap: anywhere; }
+
+@media (max-width: 700px) {
+  .dice-body { padding: 16px; }
+  .dice-body--dual, .dice-workspace { grid-template-columns: 1fr; }
+  .duality-board { gap: 8px; }
+  .duality-card { min-height: 130px; padding: 16px 8px; }
+  .duality-card-num { font-size: 56px; }
+  .std-sides-row { grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 10px; }
+  .result-banner, .std-result-box { min-height: 180px; }
+}
 
 /* 记录栏 */
 .history-card {
