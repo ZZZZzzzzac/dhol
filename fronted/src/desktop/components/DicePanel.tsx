@@ -218,7 +218,7 @@ export default function DicePanel({
               </div>
               <div className="std-result-box">
                 <div className="std-total-num">{latestStd ? latestStd.results.map(r => r.total).join('、') : '—'}</div>
-                <div className="std-breakdown-txt">{latestStd?.normalized_formula ?? (standardDice.length ? standardFormula : '请选择骰子')}</div>
+                <div className="std-breakdown-txt">{currentMatchesLatestStd ? standardFormula : latestStd?.normalized_formula ?? (standardDice.length ? standardFormula : '请选择骰子')}</div>
                 {latestStd && !currentMatchesLatestStd && <div className="std-current-formula" aria-live="polite">当前公式：{standardDice.length ? standardFormula : '请选择骰子'}</div>}
               </div>
             </div>
