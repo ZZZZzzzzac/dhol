@@ -13,7 +13,12 @@ function rolledDiceText(record: DiceRollRecord): string {
   const pieces = record.mode === 'dual'
     ? [`希望[${result.hope}]`, `恐惧[${result.fear}]`]
     : []
-  pieces.push(...result.terms.map(term => `${term.notation}[${term.rolls.join(', ')}]`))
+  pieces.push(...result.terms.map(term => {
+    const kept = record.mode === 'standard' && result.kept_primary !== undefined
+      ? `取${record.modifier_mode === 'advantage' ? '高' : '低'}${result.kept_primary}`
+      : ''
+    return `${term.notation}[${term.rolls.join(', ')}]${kept}`
+  }))
   let text = pieces.join(' + ')
   if (result.advantage_roll !== undefined && record.mode === 'dual') {
     const rolls = result.advantage_rolls ?? [result.advantage_roll]
@@ -45,13 +50,17 @@ export default function DicePanel({
   const [standardDice, setStandardDice] = useState<Array<{ sides: number; count: number }>>([])
   const [modifier, setModifier] = useState(0)
   const [dualAdvantage, setDualAdvantage] = useState<{ mode: DiceModifierMode; count: number }>({ mode: 'normal', count: 0 })
+  const [standardAdvantage, setStandardAdvantage] = useState<DiceModifierMode>('normal')
+  const canUseStandardAdvantage = standardDice.length === 1 && standardDice[0].sides === 20 && standardDice[0].count === 1
   const standardFormula = standardDice.map(({ sides, count }) => `${count}d${sides}`).join(' + ')
     + (modifier > 0 ? ` + ${modifier}` : modifier < 0 ? ` - ${Math.abs(modifier)}` : '')
+    + (canUseStandardAdvantage && standardAdvantage !== 'normal' ? ` ${standardAdvantage === 'advantage' ? '优势' : '劣势'}` : '')
 
   const latestDualRecord = dice.slice().reverse().find(d => d.mode === 'dual')
   const latestDual = latestDualRecord?.results[0]
   const latestStd = dice.slice().reverse().find(d => d.mode === 'standard')
   const currentMatchesLatestStd = latestStd?.request.modifier === modifier
+    && latestStd.request.modifier_mode === (canUseStandardAdvantage ? standardAdvantage : 'normal')
     && latestStd.request.dice.length === standardDice.length
     && standardDice.every(entry => latestStd.request.dice.some(rolled => rolled.sides === entry.sides && rolled.count === entry.count))
 
@@ -77,7 +86,7 @@ export default function DicePanel({
   const rollStd = () => {
     onRoll({
       mode: 'standard',
-      modifier_mode: 'normal',
+      modifier_mode: canUseStandardAdvantage ? standardAdvantage : 'normal',
       repeat: 1,
       modifier,
       dice: standardDice
@@ -85,6 +94,7 @@ export default function DicePanel({
   }
 
   const changeStandardDie = (sides: number, delta: 1 | -1) => {
+    setStandardAdvantage('normal')
     setStandardDice(current => {
       const existing = current.find(entry => entry.sides === sides)
       if (!existing) return delta > 0 ? [...current, { sides, count: 1 }] : current
@@ -93,6 +103,11 @@ export default function DicePanel({
         ? current.filter(entry => entry.sides !== sides)
         : current.map(entry => entry.sides === sides ? { sides, count } : entry)
     })
+  }
+
+  const changeStandardAdvantage = (mode: 'advantage' | 'disadvantage') => {
+    if (!canUseStandardAdvantage) return
+    setStandardAdvantage(current => current === mode ? 'normal' : mode)
   }
 
   return <section className="dice-section" aria-labelledby="dice-title">
@@ -235,12 +250,26 @@ export default function DicePanel({
               <div className="dice-controls">
               <div className="param-unit">
                 <label className="param-label" htmlFor="std-mod">加值</label>
-                <input
-                  id="std-mod"
-                  type="number"
-                  value={modifier}
-                  onChange={e => setModifier(Number(e.target.value) || 0)}
-                />
+                <div className="dual-modifier-row">
+                  <input
+                    id="std-mod"
+                    type="number"
+                    value={modifier}
+                    onChange={e => setModifier(Number(e.target.value) || 0)}
+                  />
+                  {(['advantage', 'disadvantage'] as const).map(mode => {
+                    const label = mode === 'advantage' ? '优势' : '劣势'
+                    return <button
+                      key={mode}
+                      type="button"
+                      className={canUseStandardAdvantage && standardAdvantage === mode ? 'dual-advantage-btn active' : 'dual-advantage-btn'}
+                      disabled={!canUseStandardAdvantage}
+                      onClick={() => changeStandardAdvantage(mode)}
+                      aria-pressed={canUseStandardAdvantage && standardAdvantage === mode}
+                      aria-label={`${label}；仅单枚 d20 可用，单击切换`}
+                    >{label}</button>
+                  })}
+                </div>
               </div>
               <div className="dice-modifier-presets">
                 {[2, 3, 5].map(value => <button key={value} type="button" onClick={() => setModifier(current => current + value)}>+{value}</button>)}
