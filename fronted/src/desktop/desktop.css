@@ -122,6 +122,21 @@ input, select, textarea {
 }
 
 /* 顶栏 */
+.room-share { position: relative; }
+.room-share__popover {
+  position: absolute;
+  right: 0;
+  top: calc(100% + 8px);
+  width: min(340px, calc(100vw - 32px));
+  padding: 16px;
+  display: grid;
+  gap: 10px;
+  border: 1px solid var(--border);
+  background: var(--surface);
+  box-shadow: 0 4px 12px #0002;
+}
+.room-share__popover input { min-width: 0; width: 100%; }
+
 .room-toolbar {
   border-bottom: 2px solid var(--border);
   background: var(--surface);
@@ -184,6 +199,8 @@ input, select, textarea {
   .room-toolbar { flex-wrap: wrap; gap: 8px; padding-bottom: 8px; }
   .room-toolbar__session { position: static; transform: none; order: 3; width: 100%; justify-content: center; }
   .room-toolbar__actions { border-left: 0; padding-left: 0; flex-wrap: wrap; }
+  .room-share { position: static; }
+  .room-share__popover { right: 16px; top: 100%; }
 }
 
 .invite-code {

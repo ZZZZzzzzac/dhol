@@ -10,10 +10,10 @@ const errors: Record<string, string> = {
   INVALID_BACKUP: '备份文件无效或不是新版房间备份。'
 }
 
-export default function DesktopLanding({ onEnter }: { onEnter: (session: DesktopSession) => void }) {
+export default function DesktopLanding({ onEnter, initialInviteCode = '' }: { onEnter: (session: DesktopSession) => void; initialInviteCode?: string }) {
   const [nickname, setNickname] = useState('')
   const [roomName, setRoomName] = useState('')
-  const [inviteCode, setInviteCode] = useState('')
+  const [inviteCode, setInviteCode] = useState(initialInviteCode)
   const [backup, setBackup] = useState<unknown>(null)
   const [backupName, setBackupName] = useState('')
   const [busy, setBusy] = useState(false)
