@@ -9,7 +9,7 @@ import CharacterDetailDialog, { type DetailState } from './components/character-
 import FearTracker from './components/FearTracker'
 import CountdownTracker, { type CountdownClock } from './components/CountdownTracker'
 import XCard from './components/XCard'
-import DicePanel, { type RoomLogItem } from './components/DicePanel'
+import DicePanel, { type DicePanelTab, type RoomLogItem } from './components/DicePanel'
 import RoomToolbar from './components/RoomToolbar'
 import BackupDialog from './components/BackupDialog'
 import { clearRoomBrowserState, loadCountdowns } from './room-browser-state'
@@ -25,6 +25,9 @@ export default function DesktopRoom({ session, onLeave }: { session: DesktopSess
   }), [session])
 
   const lifecycle = useRef(0)
+  const dicePanelRef = useRef<HTMLElement>(null)
+  const quickRollSequence = useRef(0)
+  const [diceTab, setDiceTab] = useState<DicePanelTab>('dual')
   const [detail, setDetail] = useState<{ character: CharacterSummary; state: DetailState } | null>(null)
   const [deleteOpen, setDeleteOpen] = useState(false)
   const [deleting, setDeleting] = useState(false)
@@ -68,7 +71,10 @@ export default function DesktopRoom({ session, onLeave }: { session: DesktopSess
   useEffect(() => {
     const epoch = ++lifecycle.current
     sync.start()
-    return () => { queueMicrotask(() => { if (lifecycle.current === epoch) sync.destroy() }) }
+    return () => {
+      quickRollSequence.current += 1
+      queueMicrotask(() => { if (lifecycle.current === epoch) sync.destroy() })
+    }
   }, [sync])
 
   const subscribe = useCallback((listener: () => void) => sync.subscribe(listener), [sync])
@@ -139,9 +145,15 @@ export default function DesktopRoom({ session, onLeave }: { session: DesktopSess
     addRoomLog(active ? 'X卡已激活（战局暂停）' : 'X卡已解除')
   }
 
-  function quickRollStat(character: CharacterSummary, statName: string, statVal: string) {
+  async function quickRollStat(character: CharacterSummary, statName: string, statVal: string) {
     const modifier = Number(statVal)
     if (!ready || !Number.isFinite(modifier)) return
+
+    const sequence = ++quickRollSequence.current
+    setDiceTab('dual')
+    await scrollToDicePanel(dicePanelRef.current)
+    if (sequence !== quickRollSequence.current || sync.getState().connection !== 'ready') return
+
     submit({ type: 'dice.roll', payload: { mode: 'dual', modifier_mode: 'normal', repeat: 1, modifier, dice: [] } })
     addRoomLog(`${character.name} 掷${statName}（${modifier >= 0 ? '+' : ''}${modifier}）`)
   }
@@ -268,9 +280,12 @@ export default function DesktopRoom({ session, onLeave }: { session: DesktopSess
 
           {/* 模块三：掷骰 (对称三栏：房间记录 + 掷骰操作 + 掷骰记录) */}
           <DicePanel
+            ref={dicePanelRef}
             dice={room.dice}
             ready={ready}
             pending={sync.pending().some(entry => entry.command.type === 'dice.roll')}
+            activeTab={diceTab}
+            onActiveTabChange={setDiceTab}
             onRoll={(request: DiceRollRequest) => submit({ type: 'dice.roll', payload: request })}
             onClear={() => submit({ type: 'dice.clearHistory' })}
             roomLog={roomLog}
@@ -317,4 +332,36 @@ export default function DesktopRoom({ session, onLeave }: { session: DesktopSess
       </div>
     )}
   </main>
+}
+
+function scrollToDicePanel(panel: HTMLElement | null): Promise<void> {
+  if (!panel) return Promise.resolve()
+
+  panel.scrollIntoView({ behavior: 'smooth', block: 'start' })
+
+  return new Promise(resolve => {
+    const startedAt = performance.now()
+    let previousTop = panel.getBoundingClientRect().top
+    let stableFrames = 0
+    let frame = 0
+
+    const finish = () => {
+      cancelAnimationFrame(frame)
+      resolve()
+    }
+
+    const checkPosition = (now: number) => {
+      const top = panel.getBoundingClientRect().top
+      stableFrames = Math.abs(top - previousTop) < 1 ? stableFrames + 1 : 0
+      previousTop = top
+
+      if ((now - startedAt >= 120 && stableFrames >= 3) || now - startedAt >= 1200) {
+        finish()
+        return
+      }
+      frame = requestAnimationFrame(checkPosition)
+    }
+
+    frame = requestAnimationFrame(checkPosition)
+  })
 }

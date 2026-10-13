@@ -4,7 +4,7 @@ import { expect, it, vi } from 'vitest'
 import DicePanel from '../desktop/components/DicePanel'
 
 it('shows a pending server roll without inventing a temporary result', () => {
-  const html = renderToStaticMarkup(<DicePanel dice={[]} ready pending onRoll={vi.fn()} onClear={vi.fn()} />)
+  const html = renderToStaticMarkup(<DicePanel dice={[]} ready pending activeTab="dual" onActiveTabChange={vi.fn()} onRoll={vi.fn()} onClear={vi.fn()} />)
   expect(html).toContain('掷骰中')
   expect(html).not.toMatch(/>\d+<\/b>/)
 })
@@ -32,7 +32,7 @@ it('renders 关键成功 verdict and hist-tag--crit badge for critical duality r
     ],
   }
 
-  const html = renderToStaticMarkup(<DicePanel dice={[critRoll]} ready pending={false} onRoll={vi.fn()} onClear={vi.fn()} />)
+  const html = renderToStaticMarkup(<DicePanel dice={[critRoll]} ready pending={false} activeTab="dual" onActiveTabChange={vi.fn()} onRoll={vi.fn()} onClear={vi.fn()} />)
   expect(html).toContain('关键成功')
   expect(html).not.toContain('大成功')
   expect(html).toContain('hist-tag--crit')
@@ -50,7 +50,7 @@ it('shows rolled values in history without a redundant standard dice tag', () =>
     ] }],
   }
 
-  const html = renderToStaticMarkup(<DicePanel dice={[roll]} ready pending={false} onRoll={vi.fn()} onClear={vi.fn()} />)
+  const html = renderToStaticMarkup(<DicePanel dice={[roll]} ready pending={false} activeTab="dual" onActiveTabChange={vi.fn()} onRoll={vi.fn()} onClear={vi.fn()} />)
   expect(html).toContain('1d6[3] + 2d8[4, 5] + 2')
   expect(html).not.toContain('class="hist-tag ')
 })

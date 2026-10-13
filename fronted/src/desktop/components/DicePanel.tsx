@@ -1,5 +1,7 @@
-import { useState } from 'react'
+import { forwardRef, useState } from 'react'
 import type { DiceModifierMode, DiceRollRecord, DiceRollRequest } from '@dhgc/shared/desktop'
+
+export type DicePanelTab = 'dual' | 'standard'
 
 export interface RoomLogItem {
   text: string
@@ -29,24 +31,27 @@ function rolledDiceText(record: DiceRollRecord): string {
   return text
 }
 
-export default function DicePanel({
-  dice,
-  ready,
-  pending,
-  onRoll,
-  onClear,
-  roomLog = [],
-  onClearRoomLog
-}: {
+const DicePanel = forwardRef<HTMLElement, {
   dice: DiceRollRecord[]
   ready: boolean
   pending: boolean
+  activeTab: DicePanelTab
+  onActiveTabChange: (tab: DicePanelTab) => void
   onRoll: (request: DiceRollRequest) => void
   onClear: () => void
   roomLog?: RoomLogItem[]
   onClearRoomLog?: () => void
-}) {
-  const [activeTab, setActiveTab] = useState<'dual' | 'standard'>('dual')
+}>(function DicePanel({
+  dice,
+  ready,
+  pending,
+  activeTab,
+  onActiveTabChange,
+  onRoll,
+  onClear,
+  roomLog = [],
+  onClearRoomLog
+}, ref) {
   const [standardDice, setStandardDice] = useState<Array<{ sides: number; count: number }>>([])
   const [modifier, setModifier] = useState(0)
   const [dualAdvantage, setDualAdvantage] = useState<{ mode: DiceModifierMode; count: number }>({ mode: 'normal', count: 0 })
@@ -110,7 +115,7 @@ export default function DicePanel({
     setStandardAdvantage(current => current === mode ? 'normal' : mode)
   }
 
-  return <section className="dice-section" aria-labelledby="dice-title">
+  return <section ref={ref} className="dice-section" aria-labelledby="dice-title">
     <div className="section-head">
       <h2 id="dice-title" className="section-title">掷骰</h2>
     </div>
@@ -145,14 +150,14 @@ export default function DicePanel({
           <button
             type="button"
             className={`dice-tab-btn ${activeTab === 'dual' ? 'active' : ''}`}
-            onClick={() => setActiveTab('dual')}
+            onClick={() => onActiveTabChange('dual')}
           >
             二元骰
           </button>
           <button
             type="button"
             className={`dice-tab-btn ${activeTab === 'standard' ? 'active' : ''}`}
-            onClick={() => setActiveTab('standard')}
+            onClick={() => onActiveTabChange('standard')}
           >
             普通骰
           </button>
@@ -346,4 +351,6 @@ export default function DicePanel({
       </div>
     </div>
   </section>
-}
+})
+
+export default DicePanel

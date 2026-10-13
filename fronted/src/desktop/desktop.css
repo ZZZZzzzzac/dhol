@@ -476,7 +476,10 @@ input, select, textarea {
 .clock-new-box:hover { background: var(--surface-active); border-color: var(--ink); }
 
 /* 模块三：掷骰 */
-.dice-section { width: 100%; }
+.dice-section {
+  width: 100%;
+  scroll-margin-top: 88px;
+}
 
 .dice-layout {
   display: grid;
