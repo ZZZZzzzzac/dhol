@@ -26,8 +26,8 @@ export class RoomV2DurableObject extends DurableObject<RoomV2Env> {
     ctx.blockConcurrencyWhile(async () => { this.db.initialize() })
   }
 
-  private onlineIds(): Set<string> {
-    return new Set(this.ctx.getWebSockets().flatMap(socket => {
+  private onlineIds(exclude?: WebSocket): Set<string> {
+    return new Set(this.ctx.getWebSockets().filter(socket => socket !== exclude).flatMap(socket => {
       const session = socket.deserializeAttachment() as RoomV2Session | null
       return session?.playerId ? [session.playerId] : []
     }))
@@ -117,6 +117,7 @@ export class RoomV2DurableObject extends DurableObject<RoomV2Env> {
       const [client, server] = Object.values(pair) as [WebSocket, WebSocket]
       server.serializeAttachment(session)
       this.ctx.acceptWebSocket(server, [`player:${session.playerId}`])
+      this.broadcastPresence(server)
       return new Response(null, { status: 101, webSocket: client })
     }
     if (url.pathname === '/internal/v2/snapshot' && request.method === 'GET') return json(this.db.snapshot(session.playerId, [], this.onlineIds()))
@@ -150,6 +151,20 @@ export class RoomV2DurableObject extends DurableObject<RoomV2Env> {
     }
   }
 
+  private broadcastPresence(excludeRecipient?: WebSocket, excludeOnline?: WebSocket): void {
+    const meta = this.db.meta()
+    if (!meta) return
+    const online = this.onlineIds(excludeOnline)
+    const message = JSON.stringify({
+      type: 'room.presence', protocolVersion: 2,
+      members: meta.players.map(player => ({ ...player, online: online.has(player.id) })),
+    })
+    for (const socket of this.ctx.getWebSockets()) {
+      if (socket === excludeRecipient) continue
+      try { socket.send(message) } catch { /* closed socket */ }
+    }
+  }
+
   async webSocketMessage(socket: WebSocket, data: string | ArrayBuffer): Promise<void> {
     const receivedAtMs = performance.now()
     const session = socket.deserializeAttachment() as RoomV2Session | null
@@ -179,8 +194,12 @@ export class RoomV2DurableObject extends DurableObject<RoomV2Env> {
 
   async webSocketClose(socket: WebSocket, code: number, reason: string): Promise<void> {
     try { socket.close(code, reason) } catch { /* already closed */ }
+    this.broadcastPresence(socket, socket)
   }
-  async webSocketError(socket: WebSocket): Promise<void> { try { socket.close(1011, 'Socket error') } catch { /* already closed */ } }
+  async webSocketError(socket: WebSocket): Promise<void> {
+    try { socket.close(1011, 'Socket error') } catch { /* already closed */ }
+    this.broadcastPresence(socket, socket)
+  }
 
   async alarm(): Promise<void> {
     const meta = this.db.meta()

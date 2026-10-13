@@ -17,6 +17,19 @@ function harness(roomId = 'room-fixture') {
 }
 
 describe('Room V2 sync', () => {
+  it('updates presence without advancing room sequence or changing dice', () => {
+    const { sync, room } = harness()
+    const dice = sync.getState().room?.dice
+    sync.receive({
+      type: 'room.presence', protocolVersion: 2,
+      members: room.members.map(member => member.id === 'player-b' ? { ...member, online: false } : member),
+    })
+    expect(sync.getState().room?.members.filter(member => member.online)).toHaveLength(1)
+    expect(sync.getState().room?.seq).toBe(room.seq)
+    expect(sync.getState().room?.dice).toBe(dice)
+    sync.destroy()
+  })
+
   it('retains optimistic hope after ACK until the event is applied', () => {
     const { sync, room } = harness()
     const name = room.characters[0].name

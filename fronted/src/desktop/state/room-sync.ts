@@ -169,6 +169,11 @@ export class RoomSync {
   receive(message: RoomServerMessage): void {
     if (this.destroyed) return
     if (message.type === 'room.snapshot') { this.receiveSnapshot(message); return }
+    if (message.type === 'room.presence') {
+      const current = this.confirmed.getState().room
+      if (current) { this.confirmed.setRoom({ ...current, members: message.members }); this.emit() }
+      return
+    }
     if (message.type === 'operation.ack') {
       const entry = this.outbox.list().find(item => item.command.requestId === message.requestId)
       if (!entry) return

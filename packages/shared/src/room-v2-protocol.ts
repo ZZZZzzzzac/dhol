@@ -1,7 +1,7 @@
 import type { DiceRollRecord, DiceRollRequest } from './dice-types'
 import { normalizeDiceRollRequest } from './dice'
 import { characterNameKey } from './character-panel'
-import type { CharacterResources, CharacterSummary, RoomV2Model, TrackResource } from './room-v2-model'
+import type { CharacterResources, CharacterSummary, RoomMember, RoomV2Model, TrackResource } from './room-v2-model'
 
 export const ROOM_V2_PROTOCOL_VERSION = 2 as const
 export const ROOM_V2_SESSION_AUDIENCE = 'dhol-room-v2' as const
@@ -37,7 +37,8 @@ export type RoomEvent = EventBase & (
   | { type: 'xcard.changed'; xCard: { active: boolean; updatedAt: string | null } }
 )
 export interface RoomSnapshot { type: 'room.snapshot'; protocolVersion: 2; room: RoomV2Model; receipts: MutationAck[] }
-export type RoomServerMessage = RoomSnapshot | RoomEvent | MutationAck | MutationError
+export interface RoomPresence { type: 'room.presence'; protocolVersion: 2; members: RoomMember[] }
+export type RoomServerMessage = RoomSnapshot | RoomPresence | RoomEvent | MutationAck | MutationError
 
 export function parseSyncRequest(value: unknown): SyncRequest {
   if (!value || typeof value !== 'object' || Array.isArray(value)) throw new Error('INVALID_COMMAND')

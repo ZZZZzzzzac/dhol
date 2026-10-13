@@ -49,7 +49,45 @@ function nextRoll(socket: WebSocket): Promise<Extract<RoomEvent, { type: 'dice.r
   })
 }
 
+function nextPresence(socket: WebSocket): Promise<{ members: Array<{ id: string; online: boolean }> }> {
+  return new Promise((resolve, reject) => {
+    const timeout = setTimeout(() => { socket.removeEventListener('message', onMessage); reject(new Error('timed out waiting for room.presence')) }, 5_000)
+    const onMessage = (message: MessageEvent) => {
+      const value = JSON.parse(String(message.data)) as { type: string; members: Array<{ id: string; online: boolean }> }
+      if (value.type !== 'room.presence') return
+      clearTimeout(timeout)
+      socket.removeEventListener('message', onMessage)
+      resolve(value)
+    }
+    socket.addEventListener('message', onMessage)
+  })
+}
+
 describe('Room V2 workerd integration', () => {
+  it('updates online members when tabs connect and close, counting two tabs for one player once', async () => {
+    const { stub, room } = await createRoom('WRK006')
+    const first = await socketFor(stub, room, room.players[0])
+
+    const joined = nextPresence(first)
+    const second = await socketFor(stub, room, room.players[1])
+    expect((await joined).members).toMatchObject([
+      { id: 'player-a', online: true }, { id: 'player-b', online: true },
+    ])
+
+    const anotherTab = nextPresence(first)
+    const third = await socketFor(stub, room, room.players[1])
+    expect((await anotherTab).members.filter(member => member.online)).toHaveLength(2)
+
+    const oneTabClosed = nextPresence(first)
+    second.close()
+    expect((await oneTabClosed).members.find(member => member.id === 'player-b')?.online).toBe(true)
+
+    const lastTabClosed = nextPresence(first)
+    third.close()
+    expect((await lastTabClosed).members.find(member => member.id === 'player-b')?.online).toBe(false)
+    first.close()
+  })
+
   it('uses the query session token when a same-origin preview forwards Basic Auth', async () => {
     const { stub, room } = await createRoom('WRK000')
     const socket = await socketFor(stub, room, room.players[0], 'Basic dGVzdGVyOnByZXZpZXc=')
