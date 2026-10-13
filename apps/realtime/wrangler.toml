@@ -20,7 +20,7 @@ deleted_classes = ["RoomDurableObject"]
 
 [vars]
 ALLOWED_ORIGIN = "https://screenol.pages.dev"
-CHARACTER_INGEST_ORIGINS = "https://dhsheet.top"
+CHARACTER_INGEST_ORIGINS = "https://dhsheet.top,https://daggerheart.cn"
 
 # Bind this after creating the D1 database:
 # [[d1_databases]]

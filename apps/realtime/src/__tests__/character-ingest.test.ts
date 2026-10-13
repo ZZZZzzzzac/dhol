@@ -6,7 +6,7 @@ const endpoint = 'https://rooms.example/api/v2/rooms/ABC123/characters'
 
 function envWith(fetch: (request: Request) => Promise<Response>) {
   return {
-    CHARACTER_INGEST_ORIGINS: 'https://dhsheet.top',
+    CHARACTER_INGEST_ORIGINS: 'https://dhsheet.top,https://daggerheart.cn',
     ROOMS_V2: { getByName: (name: string) => {
       expect(name).toBe('ABC123')
       return { fetch }
@@ -113,6 +113,13 @@ describe('character ingestion endpoint', () => {
     }), envWith(async () => Response.json({ ok: true })))
     expect(preflight?.status).toBe(204)
     expect(preflight?.headers.get('Access-Control-Allow-Headers')).toContain('Idempotency-Key')
+
+    const pbdhPreflight = await routeCharacterIngest(new Request(endpoint, {
+      method: 'OPTIONS',
+      headers: { Origin: 'https://daggerheart.cn' },
+    }), envWith(async () => Response.json({ ok: true })))
+    expect(pbdhPreflight?.status).toBe(204)
+    expect(pbdhPreflight?.headers.get('Access-Control-Allow-Origin')).toBe('https://daggerheart.cn')
   })
 
   it('requires a six-character room code and a valid idempotency key', async () => {
