@@ -6,6 +6,7 @@ export interface DicePoolEntry { sides: number; count: number }
 export interface DiceRollRequest {
   mode: DiceRollMode
   modifier_mode: DiceModifierMode
+  advantage_count?: number
   repeat: number
   modifier: number
   dice: DicePoolEntry[]
@@ -26,6 +27,7 @@ export interface DiceRollResult {
   primary_rolls: number[]
   kept_primary?: number
   advantage_roll?: number
+  advantage_rolls?: number[]
   terms: DiceTermRoll[]
 }
 export interface DiceRollRecord {

@@ -67,6 +67,46 @@ describe('rollDicePool', () => {
     })
   })
 
+  it('rolls multiple advantage dice and adds only the highest d6', () => {
+    const rolled = rollDicePool({
+      mode: 'dual',
+      modifier_mode: 'advantage',
+      advantage_count: 3,
+      repeat: 1,
+      modifier: 2,
+      dice: [],
+    }, sequence([0.5, 0.25, 0, 0.999, 0.5]))
+
+    expect(rolled.request.advantage_count).toBe(3)
+    expect(rolled.results[0]).toMatchObject({
+      hope: 7,
+      fear: 4,
+      advantage_rolls: [1, 6, 4],
+      advantage_roll: 6,
+      total: 19,
+    })
+  })
+
+  it('subtracts only the highest d6 for multiple disadvantage dice', () => {
+    const rolled = rollDicePool({
+      mode: 'dual',
+      modifier_mode: 'disadvantage',
+      advantage_count: 2,
+      repeat: 1,
+      modifier: 0,
+      dice: [],
+    }, sequence([0, 0.5, 0.999, 0]))
+
+    expect(rolled.results[0]).toMatchObject({ advantage_rolls: [6, 1], advantage_roll: 6, total: 2 })
+  })
+
+  it('rejects an out-of-range advantage count', () => {
+    expect(() => normalizeDiceRollRequest({
+      mode: 'dual', modifier_mode: 'advantage', advantage_count: 101,
+      repeat: 1, modifier: 0, dice: [],
+    })).toThrow('优劣势骰子数量')
+  })
+
   it('uses an integer random source when one is available', () => {
     const integers = [11, 0]
     const rolled = rollDicePool({

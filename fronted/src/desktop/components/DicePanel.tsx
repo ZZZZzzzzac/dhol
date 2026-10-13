@@ -1,10 +1,27 @@
 import { useState } from 'react'
-import type { DiceRollRecord, DiceRollRequest } from '@dhgc/shared/desktop'
+import type { DiceModifierMode, DiceRollRecord, DiceRollRequest } from '@dhgc/shared/desktop'
 
 export interface RoomLogItem {
   text: string
   time: string
   tag?: string
+}
+
+function rolledDiceText(record: DiceRollRecord): string {
+  const result = record.results[0]
+  if (!result) return ''
+  const pieces = record.mode === 'dual'
+    ? [`希望[${result.hope}]`, `恐惧[${result.fear}]`]
+    : []
+  pieces.push(...result.terms.map(term => `${term.notation}[${term.rolls.join(', ')}]`))
+  let text = pieces.join(' + ')
+  if (result.advantage_roll !== undefined && record.mode === 'dual') {
+    const rolls = result.advantage_rolls ?? [result.advantage_roll]
+    const label = `${rolls.length}d6[${rolls.join(', ')}]取高${result.advantage_roll}`
+    text += ` ${record.modifier_mode === 'disadvantage' ? '−' : '+'} ${label}`
+  }
+  if (record.request.modifier !== 0) text += ` ${record.request.modifier > 0 ? '+' : '−'} ${Math.abs(record.request.modifier)}`
+  return text
 }
 
 export default function DicePanel({
@@ -27,6 +44,7 @@ export default function DicePanel({
   const [activeTab, setActiveTab] = useState<'dual' | 'standard'>('dual')
   const [standardDice, setStandardDice] = useState<Array<{ sides: number; count: number }>>([])
   const [modifier, setModifier] = useState(0)
+  const [dualAdvantage, setDualAdvantage] = useState<{ mode: DiceModifierMode; count: number }>({ mode: 'normal', count: 0 })
   const standardFormula = standardDice.map(({ sides, count }) => `${count}d${sides}`).join(' + ')
     + (modifier > 0 ? ` + ${modifier}` : modifier < 0 ? ` - ${Math.abs(modifier)}` : '')
 
@@ -40,10 +58,19 @@ export default function DicePanel({
   const rollDual = () => {
     onRoll({
       mode: 'dual',
-      modifier_mode: 'normal',
+      modifier_mode: dualAdvantage.mode,
+      ...(dualAdvantage.count ? { advantage_count: dualAdvantage.count } : {}),
       repeat: 1,
       modifier,
       dice: []
+    })
+  }
+
+  const changeDualAdvantage = (mode: 'advantage' | 'disadvantage', delta: 1 | -1) => {
+    setDualAdvantage(current => {
+      if (current.mode !== mode) return delta > 0 ? { mode, count: 1 } : current
+      const count = Math.max(0, Math.min(100, current.count + delta))
+      return { mode: count ? mode : 'normal', count }
     })
   }
 
@@ -132,15 +159,30 @@ export default function DicePanel({
             <div className="dice-controls">
               <div className="param-unit">
                 <label className="param-label" htmlFor="duality-mod">加值</label>
-                <input
-                  id="duality-mod"
-                  type="number"
-                  value={modifier}
-                  onChange={e => setModifier(Number(e.target.value) || 0)}
-                />
+                <div className="dual-modifier-row">
+                  <input
+                    id="duality-mod"
+                    type="number"
+                    value={modifier}
+                    onChange={e => setModifier(Number(e.target.value) || 0)}
+                  />
+                  {(['advantage', 'disadvantage'] as const).map(mode => {
+                    const count = dualAdvantage.mode === mode ? dualAdvantage.count : 0
+                    const label = mode === 'advantage' ? '优势' : '劣势'
+                    return <button
+                      key={mode}
+                      type="button"
+                      className={count ? 'dual-advantage-btn active' : 'dual-advantage-btn'}
+                      onClick={() => changeDualAdvantage(mode, 1)}
+                      onContextMenu={e => { e.preventDefault(); changeDualAdvantage(mode, -1) }}
+                      aria-pressed={count > 0}
+                      aria-label={`${label}，当前 ${count} 枚 d6；左键增加，右键减少`}
+                    >{label}{count > 0 ? ` ${count}` : ''}</button>
+                  })}
+                </div>
               </div>
               <div className="dice-modifier-presets">
-                {[2, 3, 5].map(value => <button key={value} type="button" onClick={() => setModifier(value)}>+{value}</button>)}
+                {[2, 3, 5].map(value => <button key={value} type="button" onClick={() => setModifier(current => current + value)}>+{value}</button>)}
               </div>
               <button
                 type="button"
@@ -152,19 +194,15 @@ export default function DicePanel({
               </button>
             </div>
             <div className="result-banner">
-              {latestDual && (
+              {latestDual && latestDualRecord && (
                 <>
-                <div>
-                  <div className={`result-verdict ${latestDual.critical ? 'crit' : latestDual.outcome === 'hope' ? 'hope' : 'fear'}`}>
-                    {latestDual.critical ? '关键成功' : latestDual.outcome === 'hope' ? '希望结果' : '恐惧结果'}
+                  <div>
+                    <div className={`result-verdict ${latestDual.critical ? 'crit' : latestDual.outcome === 'hope' ? 'hope' : 'fear'}`}>
+                      {latestDual.critical ? '关键成功' : latestDual.outcome === 'hope' ? '希望结果' : '恐惧结果'}
+                    </div>
+                    <div className="result-formula">{rolledDiceText(latestDualRecord)}</div>
                   </div>
-                  <div className="result-formula">
-                    希望[{latestDual.hope}] + 恐惧[{latestDual.fear}]
-                    {(latestDualRecord?.request.modifier ?? 0) > 0 && ` + ${latestDualRecord?.request.modifier}`}
-                    {(latestDualRecord?.request.modifier ?? 0) < 0 && ` - ${Math.abs(latestDualRecord?.request.modifier ?? 0)}`}
-                  </div>
-                </div>
-                <div className="result-total">{latestDual.total}</div>
+                  <div className="result-total">{latestDual.total}</div>
                 </>
               )}
             </div>
@@ -205,7 +243,7 @@ export default function DicePanel({
                 />
               </div>
               <div className="dice-modifier-presets">
-                {[2, 3, 5].map(value => <button key={value} type="button" onClick={() => setModifier(value)}>+{value}</button>)}
+                {[2, 3, 5].map(value => <button key={value} type="button" onClick={() => setModifier(current => current + value)}>+{value}</button>)}
               </div>
             <button
               type="button"
@@ -254,8 +292,6 @@ export default function DicePanel({
                 } else if (res.outcome === 'fear') {
                   tagText = '恐惧结果'
                   tagClass = 'hist-tag--fear'
-                } else if (item.mode === 'standard') {
-                  tagText = item.request.dice.map(entry => `${entry.count}d${entry.sides}`).join(' + ')
                 }
               }
               return (
@@ -267,7 +303,7 @@ export default function DicePanel({
                     </span>
                   </div>
                   <div className="hist-bottom">
-                    <span className="hist-formula">{item.normalized_formula}</span>
+                    <span className="hist-formula">{rolledDiceText(item)}</span>
                     <div style={{ display: 'flex', alignItems: 'baseline', gap: '6px' }}>
                       {tagText && <span className={`hist-tag ${tagClass}`}>{tagText}</span>}
                       <span className="hist-val">{item.results.map(r => r.total).join('、')}</span>

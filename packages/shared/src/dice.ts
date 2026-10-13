@@ -27,6 +27,7 @@ export function normalizeDiceRollRequest(input: DiceRollRequest): DiceRollReques
   const repeat = boundedInteger(input?.repeat, 1, MAX_REPEAT, '重复次数')
   const modifier = boundedInteger(input?.modifier, -MAX_MODIFIER, MAX_MODIFIER, '固定加值')
   const modifierMode = normalizeModifierMode(input?.modifier_mode)
+  const advantageCount = modifierMode === 'normal' ? 0 : boundedInteger(input?.advantage_count ?? 1, 1, MAX_DICE_PER_TYPE, '优劣势骰子数量')
   const dice = normalizeDicePool(input?.dice)
 
   if (mode === 'standard' && dice.length === 0) {
@@ -41,11 +42,15 @@ export function normalizeDiceRollRequest(input: DiceRollRequest): DiceRollReques
     if (mode !== 'dual' && !isSingleD20) {
       throw new Error('只有单枚 d20 和匕首之心二元骰支持优势或劣势')
     }
+    if (mode === 'standard' && advantageCount !== 1) {
+      throw new Error('单枚 d20 只能使用一次优势或劣势')
+    }
   }
 
   return {
     mode,
     modifier_mode: modifierMode,
+    ...(modifierMode === 'normal' ? {} : { advantage_count: advantageCount }),
     repeat,
     modifier,
     dice,
@@ -87,6 +92,7 @@ function aggregateRolls(rolls: DiceRollResult[], request: DiceRollRequest): Dice
       fear,
       primary_rolls: primaryRolls,
       advantage_roll: advantageRoll,
+      advantage_rolls: advantageRolls.flatMap(roll => roll.advantage_rolls ?? (roll.advantage_roll === undefined ? [] : [roll.advantage_roll])),
       terms,
     }
   }
@@ -128,8 +134,8 @@ export function formatDiceFormula(request: DiceRollRequest): string {
     ? ` + ${request.modifier}`
     : request.modifier < 0 ? ` - ${Math.abs(request.modifier)}` : ''
   const advantage = request.modifier_mode === 'advantage'
-    ? ' 优势'
-    : request.modifier_mode === 'disadvantage' ? ' 劣势' : ''
+    ? ` 优势${(request.advantage_count ?? 1) > 1 ? ` ${request.advantage_count}d6 取最高` : ''}`
+    : request.modifier_mode === 'disadvantage' ? ` 劣势${(request.advantage_count ?? 1) > 1 ? ` ${request.advantage_count}d6 取最高` : ''}` : ''
   const formula = `${base}${bonusDice}${modifier}${advantage}`
   return request.repeat > 1 ? `${request.repeat} 次合计：${formula}` : formula
 }
@@ -172,7 +178,8 @@ function rollStandard(request: DiceRollRequest, random: DiceRandomSource): DiceR
 function rollDual(request: DiceRollRequest, random: DiceRandomSource): DiceRollResult {
   const hope = rollDie(12, random)
   const fear = rollDie(12, random)
-  const advantageRoll = request.modifier_mode === 'normal' ? undefined : rollDie(6, random)
+  const advantageRolls = request.modifier_mode === 'normal' ? [] : rollMany(request.advantage_count ?? 1, 6, random)
+  const advantageRoll = advantageRolls.length ? Math.max(...advantageRolls) : undefined
   const terms = request.dice.map((entry) => rollPoolEntry(entry, random))
   const bonusTotal = terms.reduce((sum, term) => sum + term.subtotal, 0)
   const advantageTotal = advantageRoll === undefined
@@ -188,6 +195,7 @@ function rollDual(request: DiceRollRequest, random: DiceRandomSource): DiceRollR
     fear,
     primary_rolls: [hope, fear],
     advantage_roll: advantageRoll,
+    advantage_rolls: advantageRolls,
     terms,
   }
 }

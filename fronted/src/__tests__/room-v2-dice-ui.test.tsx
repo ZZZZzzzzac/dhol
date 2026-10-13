@@ -38,3 +38,20 @@ it('renders 关键成功 verdict and hist-tag--crit badge for critical duality r
   expect(html).toContain('hist-tag--crit')
 })
 
+it('shows rolled values in history without a redundant standard dice tag', () => {
+  const roll: DiceRollRecord = {
+    id: 'standard-1', created_at: new Date().toISOString(), actor_player_id: 'p1', actor_name: 'Player One',
+    normalized_formula: '1d6 + 2d8 + 2',
+    request: { mode: 'standard', modifier_mode: 'normal', repeat: 1, modifier: 2, dice: [{ sides: 6, count: 1 }, { sides: 8, count: 2 }] },
+    mode: 'standard', modifier_mode: 'normal',
+    results: [{ total: 14, critical: false, primary_rolls: [], terms: [
+      { notation: '1d6', sides: 6, count: 1, rolls: [3], subtotal: 3 },
+      { notation: '2d8', sides: 8, count: 2, rolls: [4, 5], subtotal: 9 },
+    ] }],
+  }
+
+  const html = renderToStaticMarkup(<DicePanel dice={[roll]} ready pending={false} onRoll={vi.fn()} onClear={vi.fn()} />)
+  expect(html).toContain('1d6[3] + 2d8[4, 5] + 2')
+  expect(html).not.toContain('class="hist-tag ')
+})
+
